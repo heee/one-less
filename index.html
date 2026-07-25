@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<title>One Less</title>
+<meta name="description" content="A private, local-only drink tracker. Log dry days and drinks, watch your streak, share when you want support.">
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#F4F1EB">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="One Less">
+<link rel="icon" href="icons/icon-192.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ============ SCREEN: WELCOME ============ -->
+  <section id="screen-welcome" class="screen active">
+    <div class="welcome-body">
+      <div class="welcome-hero">💧</div>
+      <h1 class="screen-title">One Less</h1>
+      <p class="welcome-copy">
+        This app helps you see your drinking clearly, so you can bring it down.
+        Everything you log stays on this device — no account, no server,
+        nothing leaves your phone. When you want support, you can share a
+        short message with people you trust; only the message goes, never
+        your data.
+      </p>
+
+      <div class="welcome-callout">
+        <div class="welcome-callout-title">📲 Add this to your home screen</div>
+        <p class="welcome-callout-copy">
+          On iPhone, a page kept only as a Safari tab can have its storage
+          cleared after about a week of not being opened. Installed to the
+          home screen, it's kept.
+        </p>
+        <p class="welcome-callout-steps">Share → Add to Home Screen</p>
+      </div>
+
+      <p class="welcome-footnote">You can always back up your data from Settings → Back up.</p>
+
+      <button id="btn-get-started" type="button" class="btn btn-primary btn-large">Get started</button>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN: HOME ============ -->
+  <section id="screen-home" class="screen">
+    <div class="home-topbar">
+      <h1 class="app-title">One Less</h1>
+      <button id="btn-open-settings" type="button" class="icon-btn" aria-label="Settings" title="Settings">⚙</button>
+    </div>
+
+    <div class="stat-strip">
+      <div class="stat-tile">
+        <div class="stat-icon">🔥</div>
+        <div id="stat-streak-value" class="stat-value">0</div>
+        <div class="stat-label">Dry streak</div>
+        <div id="stat-streak-longest" class="stat-sub">longest: 0</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-icon">🎯</div>
+        <div id="stat-week-value" class="stat-value">0 of 7</div>
+        <div class="stat-label">This week</div>
+        <div class="stat-progress-track"><div id="stat-week-bar" class="stat-progress-fill"></div></div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-icon">📊</div>
+        <div id="stat-month-value" class="stat-value">0</div>
+        <div class="stat-label">This month</div>
+        <div id="stat-month-delta" class="stat-sub">—</div>
+      </div>
+    </div>
+
+    <div id="catchup-banner" class="catchup-banner hidden">
+      <span id="catchup-text">days need logging</span>
+      <div class="catchup-actions">
+        <button id="btn-catchup-log" type="button" class="btn btn-secondary btn-sm">Log them</button>
+        <button id="btn-catchup-dismiss" type="button" class="icon-btn catchup-dismiss" aria-label="Dismiss">×</button>
+      </div>
+    </div>
+
+    <div class="calendar-card">
+      <div class="calendar-header">
+        <button id="btn-month-prev" type="button" class="icon-btn" aria-label="Previous month">‹</button>
+        <div id="calendar-month-label" class="calendar-month-label">Month Year</div>
+        <button id="btn-month-next" type="button" class="icon-btn" aria-label="Next month">›</button>
+      </div>
+      <div class="calendar-weekdays">
+        <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
+      </div>
+      <div id="calendar-grid" class="calendar-grid"></div>
+    </div>
+
+    <div class="more-stats">
+      <h2 class="section-title">More stats</h2>
+      <div class="stat-row"><span>Dry days this month</span><span id="stat-dry-month">0</span></div>
+      <div class="stat-row"><span>Dry days this year</span><span id="stat-dry-year">0</span></div>
+      <div class="stat-row"><span>7-day average</span><span id="stat-avg7">0.0</span></div>
+      <div class="stat-row-label">Last 30 days</div>
+      <div id="trend-chart" class="trend-chart"></div>
+      <div class="stat-row"><span>Longest dry streak ever</span><span id="stat-longest-ever">0</span></div>
+      <div class="stat-row-label">Last 6 months</div>
+      <div id="bar-chart" class="bar-chart"></div>
+    </div>
+
+    <div class="home-actions">
+      <button id="btn-share" type="button" class="btn btn-primary btn-large">Share</button>
+    </div>
+  </section>
+
+  <!-- ============ SCREEN: SETTINGS ============ -->
+  <section id="screen-settings" class="screen">
+    <div class="settings-topbar">
+      <button id="btn-settings-back" type="button" class="icon-btn" aria-label="Back" title="Back">←</button>
+      <h1 class="screen-title settings-title">Settings</h1>
+    </div>
+
+    <div class="settings-block">
+      <h2 class="section-title">Tracking</h2>
+      <label class="field-label" for="settings-weekly-budget">Weekly drink budget</label>
+      <input id="settings-weekly-budget" class="text-input" type="number" min="0" max="99" inputmode="numeric">
+    </div>
+
+    <div class="settings-block">
+      <h2 class="section-title">Sharing</h2>
+      <label class="toggle-row" for="settings-share-url">
+        <span>Include app link in shares</span>
+        <input id="settings-share-url" type="checkbox">
+        <span class="toggle-switch" aria-hidden="true"></span>
+      </label>
+    </div>
+
+    <div class="settings-block">
+      <h2 class="section-title">Your data</h2>
+      <p class="settings-hint">Back up writes a JSON file you can keep anywhere. On iPhone it lands in the Files app.</p>
+      <button id="btn-backup" type="button" class="btn btn-secondary btn-large">Back up your data</button>
+
+      <p class="settings-hint" style="margin-top: 1rem;">Restore replaces everything currently on this device with a backup file.</p>
+      <button id="btn-restore" type="button" class="btn btn-secondary btn-large">Restore from backup</button>
+      <input id="input-restore-file" type="file" accept="application/json" class="hidden">
+    </div>
+
+    <div class="settings-block">
+      <h2 class="section-title">About</h2>
+      <button id="btn-show-about" type="button" class="btn btn-secondary btn-large">Show welcome screen</button>
+    </div>
+
+    <div class="settings-block settings-danger">
+      <h2 class="section-title">Danger zone</h2>
+      <div class="danger-row">
+        <p class="settings-hint">Permanently erases every day you've logged on this device. Can't be undone.</p>
+        <button id="btn-delete-all" type="button" class="btn btn-danger">Delete all data</button>
+        <div id="confirm-delete-all" class="confirm-box hidden">
+          <p>Really delete everything logged on this device?</p>
+          <div class="confirm-actions">
+            <button id="btn-delete-all-cancel" type="button" class="btn btn-secondary">Cancel</button>
+            <button id="btn-delete-all-confirm" type="button" class="btn btn-danger">Yes, delete everything</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- ============ DAY EDITOR (bottom sheet) ============ -->
+<div id="sheet-backdrop" class="sheet-backdrop hidden"></div>
+<div id="day-editor" class="sheet hidden" role="dialog" aria-modal="true">
+  <div class="sheet-handle"></div>
+  <h2 id="day-editor-date" class="sheet-title">Date</h2>
+
+  <div id="day-editor-chips" class="chip-row"></div>
+  <div id="day-editor-rows" class="drink-rows"></div>
+  <div id="day-editor-total" class="day-editor-total">0 drinks</div>
+
+  <div class="sheet-actions">
+    <button id="btn-mark-dry" type="button" class="btn btn-secondary">Mark dry</button>
+    <button id="btn-clear-day" type="button" class="btn btn-secondary">Clear</button>
+    <button id="btn-day-done" type="button" class="btn btn-primary">Done</button>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

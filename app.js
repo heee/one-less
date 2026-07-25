@@ -395,7 +395,7 @@ function renderCalendar(data) {
 
   for (let i = 0; i < leadingBlanks; i++) {
     const blank = document.createElement("div");
-    blank.className = "cal-tile empty-cell";
+    blank.className = "cal-cell empty-cell";
     grid.appendChild(blank);
   }
 
@@ -405,10 +405,18 @@ function renderCalendar(data) {
   }
 }
 
+// Returns a .cal-cell wrapper, not the tile itself: the "+" affordance has to
+// be a SIBLING of the tile button, never a child. A <button> inside a <button>
+// is invalid HTML — browsers tolerate it, but keyboard focus and screen-reader
+// announcement both break on the nested control.
 function buildCalTile(data, dateStr, today, dayNum) {
+  const cell = document.createElement("div");
+  cell.className = "cal-cell";
+
   const tile = document.createElement("button");
   tile.type = "button";
   tile.className = "cal-tile";
+  cell.appendChild(tile);
 
   const isFuture = compareDateStr(dateStr, today) > 0;
   const isToday = dateStr === today;
@@ -422,7 +430,7 @@ function buildCalTile(data, dateStr, today, dayNum) {
   if (isFuture) {
     tile.classList.add("is-future");
     tile.disabled = true;
-    return tile;
+    return cell;
   }
 
   if (isToday) tile.classList.add("is-today");
@@ -461,14 +469,11 @@ function buildCalTile(data, dateStr, today, dayNum) {
     plus.className = "cal-tile-plus";
     plus.textContent = "+";
     plus.setAttribute("aria-label", `Add drinks for ${dateStr}`);
-    plus.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openDayEditor(dateStr);
-    });
-    tile.appendChild(plus);
+    plus.addEventListener("click", () => openDayEditor(dateStr));
+    cell.appendChild(plus);
   }
 
-  return tile;
+  return cell;
 }
 
 // The single named function that owns tile-tap behavior (§7), so the

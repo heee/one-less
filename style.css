@@ -251,12 +251,16 @@ button { cursor: pointer; }
 
 /* ---------------- Calendar ---------------- */
 
+/* Pulled slightly wider than the screen's side padding and tightened inside:
+   the day tiles are the app's primary control, and at the default padding
+   seven of them across a 375px phone land at 39px — under the 44px minimum
+   touch target. The negative inline margin buys the grid back ~6px per tile. */
 .calendar-card {
   background: var(--surface);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 1rem;
-  margin-bottom: 1.25rem;
+  padding: 0.85rem 0.65rem;
+  margin: 0 -0.75rem 1.25rem;
 }
 .calendar-header {
   display: flex;
@@ -283,9 +287,18 @@ button { cursor: pointer; }
   touch-action: pan-y;
 }
 
-.cal-tile {
+/* The grid item is the cell; the tile button and the "+" button are separate
+   siblings inside it, so neither is nested in the other. */
+.cal-cell {
   position: relative;
   aspect-ratio: 1 / 1;
+}
+
+.cal-tile {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   border-radius: 10px;
   border: 1px solid transparent;
   background: transparent;
@@ -300,7 +313,7 @@ button { cursor: pointer; }
 }
 .cal-tile:active { transform: none; }
 
-.cal-tile.empty-cell { visibility: hidden; }
+.cal-cell.empty-cell { visibility: hidden; }
 
 .cal-tile.is-past-unlogged {
   background: var(--surface);

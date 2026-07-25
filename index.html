@@ -4,11 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
 <title>One Less</title>
-<meta name="description" content="A private, local-only drink tracker. Log dry days and drinks, watch your streak, share when you want support.">
+<meta name="description" content="A private, local-only drink tracker. Everything stays on your device.">
 
 <!-- PWA -->
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#F4F1EB">
+<meta name="theme-color" content="#F6F3EC">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -17,7 +17,7 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@500;600;700&family=Libre+Franklin:wght@400;500;600;700&display=swap" rel="stylesheet">
 
 <link rel="stylesheet" href="style.css">
 </head>
@@ -28,32 +28,28 @@
   <!-- ============ SCREEN: WELCOME ============ -->
   <section id="screen-welcome" class="screen active">
     <div class="welcome-body">
-      <div class="welcome-hero">💧</div>
-      <h1 class="screen-title">One Less</h1>
-      <p class="welcome-copy">
-        This app helps you see your drinking clearly, so you can bring it down.
-        Everything you log stays on this device — no account, no server,
-        nothing leaves your phone. When you want support, you can share a
-        short message with people you trust; only the message goes, never
-        your data.
-      </p>
-
-      <div class="welcome-callout">
-        <div class="welcome-callout-title">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="6.5" y="2.5" width="11" height="19" rx="2.4"/><path d="M12 8.5v6"/><path d="M9 11.5h6"/>
-          </svg>
-          <span>Add this to your home screen</span>
-        </div>
-        <p class="welcome-callout-copy">
-          On iPhone, a page kept only as a Safari tab can have its storage
-          cleared after about a week of not being opened. Installed to the
-          home screen, it's kept.
+      <div class="welcome-center">
+        <div class="welcome-hero"></div>
+        <h1 class="screen-title brand-title welcome-title">One Less</h1>
+        <p class="welcome-copy">
+          A private, judgment-free way to see your drinking clearly.
+          Everything stays on your device — nothing is shared unless you choose to.
         </p>
-        <p class="welcome-callout-steps">Share → Add to Home Screen</p>
-      </div>
 
-      <p class="welcome-footnote">You can always back up your data from Settings → Back up.</p>
+        <div class="welcome-callout">
+          <div class="welcome-callout-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="6.5" y="2.5" width="11" height="19" rx="2.4"/><path d="M12 8.5v6"/><path d="M9 11.5h6"/>
+            </svg>
+            <span>Add to your Home Screen</span>
+          </div>
+          <p class="welcome-callout-copy">
+            Keeps your data from being cleared. Share → Add to Home Screen.
+          </p>
+        </div>
+
+        <p class="welcome-footnote">You can always back up your data from Settings → Back up.</p>
+      </div>
 
       <button id="btn-get-started" type="button" class="btn btn-primary btn-large">Get started</button>
     </div>
@@ -62,55 +58,23 @@
   <!-- ============ SCREEN: HOME ============ -->
   <section id="screen-home" class="screen">
     <div class="home-topbar">
-      <h1 class="app-title">One Less</h1>
-      <div class="home-topbar-actions">
-        <button id="btn-share" type="button" class="icon-btn icon-btn-plain" aria-label="Share progress" title="Share">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 15V3.5"/><path d="M8.5 7 12 3.5 15.5 7"/>
-            <path d="M6 12.5v6a1.5 1.5 0 0 0 1.5 1.5h9a1.5 1.5 0 0 0 1.5-1.5v-6"/>
-          </svg>
-        </button>
-        <button id="btn-open-settings" type="button" class="icon-btn icon-btn-plain" aria-label="Settings" title="Settings">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="3.1"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-          </svg>
-        </button>
+      <h1 class="app-title brand-title">One Less</h1>
+      <button id="btn-open-settings" type="button" class="menu-btn" aria-label="Settings" title="Settings">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+
+    <div class="goal-card">
+      <div id="goal-ring" class="goal-ring">
+        <div class="goal-ring-inner"><span id="goal-ring-value">0/5</span></div>
+      </div>
+      <div>
+        <p id="goal-text-title" class="goal-text-title">On pace this week</p>
+        <p id="goal-text-sub" class="goal-text-sub">—</p>
       </div>
     </div>
 
-    <div class="stat-strip">
-      <div class="stat-tile">
-        <div class="stat-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 3c.6 3 2.2 4.2 3.6 5.8A7 7 0 1 1 6.6 12c0-1.3.4-2.3 1.1-3.2.3 1 .9 1.7 1.8 2.1.2-3.5 1-6.3 2.5-7.9Z"/>
-          </svg>
-        </div>
-        <div id="stat-streak-value" class="stat-value">0</div>
-        <div class="stat-label">Dry streak</div>
-        <div id="stat-streak-longest" class="stat-sub">longest: 0</div>
-      </div>
-      <div class="stat-tile">
-        <div class="stat-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="8.2"/><circle cx="12" cy="12" r="3.4"/>
-          </svg>
-        </div>
-        <div id="stat-week-value" class="stat-value">0 of 7</div>
-        <div class="stat-label">This week</div>
-        <div class="stat-progress-track"><div id="stat-week-bar" class="stat-progress-fill"></div></div>
-      </div>
-      <div class="stat-tile">
-        <div class="stat-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M6 19.5V13"/><path d="M12 19.5V6.5"/><path d="M18 19.5v-9"/>
-          </svg>
-        </div>
-        <div id="stat-month-value" class="stat-value">0</div>
-        <div class="stat-label">This month</div>
-        <div id="stat-month-delta" class="stat-sub">—</div>
-      </div>
-    </div>
+    <p id="stat-caption" class="stat-caption">—</p>
 
     <div id="catchup-banner" class="catchup-banner hidden">
       <span id="catchup-text">days need logging</span>
@@ -122,9 +86,9 @@
 
     <div class="calendar-card">
       <div class="calendar-header">
-        <button id="btn-month-prev" type="button" class="icon-btn" aria-label="Previous month">‹</button>
+        <button id="btn-month-prev" type="button" class="calendar-nav" aria-label="Previous month">‹</button>
         <div id="calendar-month-label" class="calendar-month-label">Month Year</div>
-        <button id="btn-month-next" type="button" class="icon-btn" aria-label="Next month">›</button>
+        <button id="btn-month-next" type="button" class="calendar-nav" aria-label="Next month">›</button>
       </div>
       <div class="calendar-weekdays">
         <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span>
@@ -133,14 +97,35 @@
     </div>
 
     <div class="more-stats">
-      <h2 class="section-title">More stats</h2>
-      <div class="stat-row"><span>Dry days this month</span><span id="stat-dry-month">0</span></div>
-      <div class="stat-row"><span>Dry days this year</span><span id="stat-dry-year">0</span></div>
-      <div class="stat-row"><span>7-day average</span><span id="stat-avg7">0.0</span></div>
-      <div class="stat-row-label">Last 30 days</div>
+      <div class="more-stats-header">
+        <h2 class="section-title">More stats</h2>
+        <button id="btn-share" type="button" class="share-link">Share progress ↗</button>
+      </div>
+      <div class="stat-row">
+        <span>Alcohol-free days this month</span>
+        <span><span id="stat-dry-month" class="stat-row-value">0</span><span id="stat-dry-month-pct" class="stat-row-pct">(0%)</span></span>
+      </div>
+      <div class="stat-row">
+        <span>Alcohol-free days this year</span>
+        <span><span id="stat-dry-year" class="stat-row-value">0</span><span id="stat-dry-year-pct" class="stat-row-pct">(0%)</span></span>
+      </div>
+      <div class="stat-row">
+        <span>7-day average</span>
+        <span id="stat-avg7" class="stat-row-value">0.0</span>
+      </div>
+      <div class="stat-row">
+        <span>Longest streak ever</span>
+        <span id="stat-longest-ever" class="stat-row-value">0</span>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h3 class="chart-card-title">Last 30 days</h3>
       <div id="trend-chart" class="trend-chart"></div>
-      <div class="stat-row"><span>Longest dry streak ever</span><span id="stat-longest-ever">0</span></div>
-      <div class="stat-row-label">Last 6 months</div>
+    </div>
+
+    <div class="chart-card">
+      <h3 class="chart-card-title">Drinks logged, last 6 months</h3>
       <div id="bar-chart" class="bar-chart"></div>
     </div>
 
@@ -150,50 +135,55 @@
   <section id="screen-settings" class="screen">
     <div class="settings-topbar">
       <button id="btn-settings-back" type="button" class="icon-btn" aria-label="Back" title="Back">←</button>
-      <h1 class="screen-title settings-title">Settings</h1>
+      <h1 class="screen-title">Settings</h1>
     </div>
 
     <div class="settings-block">
-      <h2 class="section-title">Tracking</h2>
-      <label class="field-label" for="settings-weekly-budget">Weekly drink budget</label>
-      <input id="settings-weekly-budget" class="text-input" type="number" min="0" max="99" inputmode="numeric">
+      <h2 class="settings-eyebrow">Tracking</h2>
+      <div class="settings-row">
+        <span class="settings-row-label">Alcohol-free days goal / week</span>
+        <div class="mini-stepper">
+          <button id="btn-goal-dec" type="button" class="mini-stepper-btn">−</button>
+          <span id="settings-weekly-goal-value" class="mini-stepper-count">5</span>
+          <button id="btn-goal-inc" type="button" class="mini-stepper-btn">+</button>
+        </div>
+      </div>
     </div>
 
     <div class="settings-block">
-      <h2 class="section-title">Sharing</h2>
+      <h2 class="settings-eyebrow">Preferences</h2>
       <label class="toggle-row" for="settings-share-url">
         <span>Include app link in shares</span>
         <input id="settings-share-url" type="checkbox">
         <span class="toggle-switch" aria-hidden="true"></span>
       </label>
+      <hr class="settings-divider">
+      <button id="btn-show-about" type="button" class="settings-nav-row">
+        <span>Show welcome screen</span>
+        <span class="chevron">›</span>
+      </button>
     </div>
 
     <div class="settings-block">
-      <h2 class="section-title">Your data</h2>
-      <p class="settings-hint">Back up writes a JSON file you can keep anywhere. On iPhone it lands in the Files app.</p>
-      <button id="btn-backup" type="button" class="btn btn-secondary btn-large">Back up your data</button>
-
-      <p class="settings-hint" style="margin-top: 1rem;">Restore replaces everything currently on this device with a backup file.</p>
-      <button id="btn-restore" type="button" class="btn btn-secondary btn-large">Restore from backup</button>
+      <h2 class="settings-eyebrow">Your data</h2>
+      <p class="settings-hint">Backs up to a file on this device.</p>
+      <div class="data-actions">
+        <button id="btn-backup" type="button" class="btn">Back up</button>
+        <button id="btn-restore" type="button" class="btn">Restore</button>
+        <button id="btn-email-backup" type="button" class="btn">Email</button>
+      </div>
       <input id="input-restore-file" type="file" accept="application/json" class="hidden">
     </div>
 
-    <div class="settings-block">
-      <h2 class="section-title">About</h2>
-      <button id="btn-show-about" type="button" class="btn btn-secondary btn-large">Show welcome screen</button>
-    </div>
-
     <div class="settings-block settings-danger">
-      <h2 class="section-title">Danger zone</h2>
-      <div class="danger-row">
-        <p class="settings-hint">Permanently erases every day you've logged on this device. Can't be undone.</p>
-        <button id="btn-delete-all" type="button" class="btn btn-danger">Delete all data</button>
-        <div id="confirm-delete-all" class="confirm-box hidden">
-          <p>Really delete everything logged on this device?</p>
-          <div class="confirm-actions">
-            <button id="btn-delete-all-cancel" type="button" class="btn btn-secondary">Cancel</button>
-            <button id="btn-delete-all-confirm" type="button" class="btn btn-danger">Yes, delete everything</button>
-          </div>
+      <h2 class="settings-eyebrow">Danger zone</h2>
+      <p class="settings-hint">Permanently erases every day you've logged on this device. Can't be undone.</p>
+      <button id="btn-delete-all" type="button" class="btn-text-danger">Delete all data</button>
+      <div id="confirm-delete-all" class="confirm-box hidden">
+        <p>Really delete everything logged on this device?</p>
+        <div class="confirm-actions">
+          <button id="btn-delete-all-cancel" type="button" class="btn btn-secondary">Cancel</button>
+          <button id="btn-delete-all-confirm" type="button" class="btn btn-danger">Yes, delete everything</button>
         </div>
       </div>
     </div>
@@ -207,14 +197,13 @@
   <div class="sheet-handle"></div>
   <h2 id="day-editor-date" class="sheet-title">Date</h2>
 
-  <div id="day-editor-chips" class="chip-row"></div>
-  <div id="day-editor-rows" class="drink-rows"></div>
-  <div id="day-editor-total" class="day-editor-total">0 drinks</div>
+  <div id="day-editor-types" class="type-grid"></div>
+  <div id="day-editor-total" class="day-editor-total">0 drinks logged</div>
 
   <div class="sheet-actions">
-    <button id="btn-mark-dry" type="button" class="btn btn-secondary">Mark dry</button>
+    <button id="btn-mark-dry" type="button" class="btn btn-secondary">Mark alcohol-free</button>
     <button id="btn-clear-day" type="button" class="btn btn-secondary">Clear</button>
-    <button id="btn-day-done" type="button" class="btn btn-primary">Done</button>
+    <button id="btn-day-done" type="button" class="btn btn-primary btn-done">Done</button>
   </div>
 </div>
 

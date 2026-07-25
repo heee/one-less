@@ -12,16 +12,14 @@
 const LS_DATA_KEY = "ol-data";
 const APP_SHARE_URL = "https://heee.github.io/one-less/";
 
-const DRY = { id: "dry", emoji: "💧", label: "Dry day" };
 const DRINK_TYPES = [
-  { id: "wine", emoji: "🍷", label: "Wine" },
-  { id: "beer", emoji: "🍺", label: "Beer" },
-  { id: "cocktail", emoji: "🍸", label: "Cocktail" },
-  { id: "spirits", emoji: "🥃", label: "Spirits" },
-  { id: "bubbles", emoji: "🥂", label: "Bubbles" },
-  { id: "other", emoji: "🍹", label: "Other" },
+  { id: "wine", label: "Wine" },
+  { id: "beer", label: "Beer" },
+  { id: "cocktail", label: "Cocktail" },
+  { id: "spirits", label: "Spirits" },
+  { id: "bubbles", label: "Bubbles" },
+  { id: "other", label: "Other" },
 ];
-const DRINK_TYPE_BY_ID = Object.fromEntries(DRINK_TYPES.map((t) => [t.id, t]));
 
 const state = {
   screen: "screen-welcome",
@@ -89,6 +87,16 @@ function startOfWeekMonday(dateStr) {
   return addDays(dateStr, -mondayDow(dateStr));
 }
 
+// 1-indexed count of days from Jan 1 through dateStr, inclusive — used for
+// "this year" percentages so an early-January day doesn't get judged against
+// a full 365-day denominator.
+function dayOfYear(dateStr) {
+  const jan1 = ymd(yearOf(dateStr), 1, 1);
+  let days = 1, cursor = jan1;
+  while (cursor !== dateStr) { cursor = addDays(cursor, 1); days++; }
+  return days;
+}
+
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December"];
 
@@ -98,7 +106,19 @@ function compareDateStr(a, b) { return a < b ? -1 : a > b ? 1 : 0; }
 
 function defaultData() {
   const today = todayStr();
-  return { v: 1, startedOn: today, onboarded: false, days: {}, settings: { weeklyBudget: 7, shareIncludeUrl: true } };
+  return { v: 1, startedOn: today, onboarded: false, days: {}, settings: { weeklyGoal: 5, shareIncludeUrl: true } };
+}
+
+// Old builds tracked a weekly drink *budget*; the redesign tracks a weekly
+// alcohol-free-days *goal* instead — a different metric, not a rename, so
+// there's no sensible numeric conversion. Anything missing the new field
+// just gets the new default.
+function migrateData(obj) {
+  if (obj && obj.settings && typeof obj.settings.weeklyGoal !== "number") {
+    delete obj.settings.weeklyBudget;
+    obj.settings.weeklyGoal = 5;
+  }
+  return obj;
 }
 
 function isValidDataShape(obj) {
@@ -115,7 +135,7 @@ function isValidDataShape(obj) {
     }
   }
   if (!obj.settings || typeof obj.settings !== "object") return false;
-  if (typeof obj.settings.weeklyBudget !== "number") return false;
+  if (typeof obj.settings.weeklyGoal !== "number") return false;
   if (typeof obj.settings.shareIncludeUrl !== "boolean") return false;
   return true;
 }
@@ -124,7 +144,7 @@ function getData() {
   try {
     const raw = localStorage.getItem(LS_DATA_KEY);
     if (!raw) return defaultData();
-    const parsed = JSON.parse(raw);
+    const parsed = migrateData(JSON.parse(raw));
     if (!isValidDataShape(parsed)) return defaultData();
     return parsed;
   } catch (e) {
@@ -140,18 +160,6 @@ function setData(data) {
 function dayTotal(entry) {
   if (!entry) return 0;
   return entry.drinks.reduce((sum, d) => sum + d.count, 0);
-}
-
-// The emoji to show on a calendar tile for a logged drink day: the type
-// with the largest count; ties break by DRINK_TYPES declaration order.
-function dominantDrinkEmoji(entry) {
-  if (!entry || entry.drinks.length === 0) return DRY.emoji;
-  let best = null;
-  for (const type of DRINK_TYPES) {
-    const d = entry.drinks.find((x) => x.type === type.id);
-    if (d && (!best || d.count > best.count)) best = d;
-  }
-  return best ? DRINK_TYPE_BY_ID[best.type].emoji : DRY.emoji;
 }
 
 // ------------------- stats: exact definitions per spec -------------------
@@ -206,14 +214,20 @@ function computeLongestStreakEver(data, today) {
   return Math.max(longest, current);
 }
 
-// Total drinks in the Monday-start week containing `today`.
-function computeWeekTotal(data, today) {
+// Alcohol-free days within the current Monday-start week, counting only
+// days up to and including today (future days in the week haven't happened
+// yet, so they can't count toward the goal).
+function computeWeekGoalProgress(data, today) {
   const weekStart = startOfWeekMonday(today);
-  let total = 0;
-  for (let i = 0; i < 7; i++) {
-    total += dayTotal(data.days[addDays(weekStart, i)]);
+  let met = 0;
+  let cursor = weekStart;
+  while (compareDateStr(cursor, today) <= 0) {
+    const entry = data.days[cursor];
+    if (entry && entry.drinks.length === 0) met++;
+    cursor = addDays(cursor, 1);
   }
-  return total;
+  const goal = data.settings.weeklyGoal;
+  return { met, goal, remaining: Math.max(0, goal - met), fraction: goal > 0 ? Math.min(1, met / goal) : 0 };
 }
 
 // Total drinks from day 1 through `uptoDay` (inclusive) of the given
@@ -226,18 +240,8 @@ function monthWindowTotal(data, year, month1, uptoDay) {
   return total;
 }
 
-// This month's total (1st..today) and the delta vs. the same day-of-month
-// window in the previous month (1..min(day, daysInPrevMonth)).
-function computeMonthStat(data, today) {
-  const year = yearOf(today), month1 = monthOf(today), day = dayOfMonthOf(today);
-  const currentTotal = monthWindowTotal(data, year, month1, day);
-
-  let prevYear = year, prevMonth = month1 - 1;
-  if (prevMonth === 0) { prevMonth = 12; prevYear = year - 1; }
-  const prevWindowDay = Math.min(day, daysInMonth(prevYear, prevMonth));
-  const prevTotal = monthWindowTotal(data, prevYear, prevMonth, prevWindowDay);
-
-  return { currentTotal, prevTotal, delta: currentTotal - prevTotal };
+function computeMonthTotal(data, today) {
+  return monthWindowTotal(data, yearOf(today), monthOf(today), dayOfMonthOf(today));
 }
 
 // Count of explicit `drinks: []` days within [fromDate, toDate] inclusive.
@@ -271,7 +275,7 @@ function computeRollingAverage7(data, today) {
   return Math.round((total / 7) * 10) / 10;
 }
 
-// Last 30 days of daily drink totals, oldest first, for the trend sparkline.
+// Last 30 days of daily drink totals, oldest first, for the trend chart.
 function computeTrend30(data, today) {
   const points = [];
   for (let i = 29; i >= 0; i--) {
@@ -331,38 +335,32 @@ function renderHome() {
   const data = getData();
   const today = todayStr();
 
-  // Stat strip
+  renderGoalCard(data, today);
+
   const streak = computeDryStreak(data, today);
   const longest = computeLongestStreakEver(data, today);
-  $("stat-streak-value").textContent = String(streak);
-  $("stat-streak-longest").textContent = `longest: ${longest}`;
-
-  const weekTotal = computeWeekTotal(data, today);
-  const budget = data.settings.weeklyBudget;
-  $("stat-week-value").textContent = `${weekTotal} of ${budget}`;
-  const pct = budget > 0 ? Math.min(1, weekTotal / budget) : (weekTotal > 0 ? 1 : 0);
-  const overBudget = weekTotal > budget;
-  const weekBar = $("stat-week-bar");
-  weekBar.style.width = `${pct * 100}%`;
-  weekBar.classList.toggle("over-budget", overBudget);
-
-  const monthStat = computeMonthStat(data, today);
-  $("stat-month-value").textContent = String(monthStat.currentTotal);
-  const deltaEl = $("stat-month-delta");
-  if (monthStat.delta === 0) {
-    deltaEl.textContent = "steady";
-    deltaEl.className = "stat-sub";
-  } else if (monthStat.delta < 0) {
-    deltaEl.textContent = `▼ ${Math.abs(monthStat.delta)} vs last month`;
-    deltaEl.className = "stat-sub is-down";
-  } else {
-    deltaEl.textContent = `▲ ${monthStat.delta} vs last month`;
-    deltaEl.className = "stat-sub is-up";
-  }
+  const monthTotal = computeMonthTotal(data, today);
+  $("stat-caption").innerHTML =
+    `<b>${streak}-day streak</b> (best ${longest}) · <b>${monthTotal}</b> drink${monthTotal === 1 ? "" : "s"} logged this month`;
 
   renderCatchupBanner(data, today);
   renderCalendar(data);
   renderMoreStats(data, today);
+}
+
+function renderGoalCard(data, today) {
+  const { met, goal, remaining, fraction } = computeWeekGoalProgress(data, today);
+  const deg = fraction * 360;
+  $("goal-ring").style.background = `conic-gradient(var(--accent) 0deg ${deg}deg, var(--border) ${deg}deg 360deg)`;
+  $("goal-ring-value").textContent = `${met}/${goal}`;
+
+  if (met >= goal) {
+    $("goal-text-title").textContent = "Goal met this week";
+    $("goal-text-sub").textContent = `You've logged ${met} alcohol-free day${met === 1 ? "" : "s"} — nice work.`;
+  } else {
+    $("goal-text-title").textContent = "On pace this week";
+    $("goal-text-sub").textContent = `${remaining} more alcohol-free day${remaining === 1 ? "" : "s"} to hit your goal.`;
+  }
 }
 
 function renderCatchupBanner(data, today) {
@@ -393,9 +391,11 @@ function renderCalendar(data) {
   const leadingBlanks = mondayDow(firstOfMonth);
   const totalDays = daysInMonth(state.viewYear, state.viewMonth);
 
+  // Blank leading cells (days outside the month): fully transparent, no
+  // border, not interactive.
   for (let i = 0; i < leadingBlanks; i++) {
     const blank = document.createElement("div");
-    blank.className = "cal-cell empty-cell";
+    blank.className = "cal-cell";
     grid.appendChild(blank);
   }
 
@@ -405,94 +405,39 @@ function renderCalendar(data) {
   }
 }
 
-// Returns a .cal-cell wrapper, not the tile itself: the "+" affordance has to
-// be a SIBLING of the tile button, never a child. A <button> inside a <button>
-// is invalid HTML — browsers tolerate it, but keyboard focus and screen-reader
-// announcement both break on the nested control.
 function buildCalTile(data, dateStr, today, dayNum) {
-  const cell = document.createElement("div");
-  cell.className = "cal-cell";
-
   const tile = document.createElement("button");
   tile.type = "button";
   tile.className = "cal-tile";
-  cell.appendChild(tile);
+  tile.textContent = String(dayNum);
 
   const isFuture = compareDateStr(dateStr, today) > 0;
   const isToday = dateStr === today;
   const entry = data.days[dateStr];
 
-  const dayNumEl = document.createElement("span");
-  dayNumEl.className = "cal-tile-daynum";
-  dayNumEl.textContent = String(dayNum);
-  tile.appendChild(dayNumEl);
-
   if (isFuture) {
     tile.classList.add("is-future");
     tile.disabled = true;
-    return cell;
+    return tile;
   }
 
   if (isToday) tile.classList.add("is-today");
 
-  if (!entry) {
-    tile.classList.add("is-past-unlogged");
-  } else if (entry.drinks.length === 0) {
+  if (entry && entry.drinks.length === 0) {
     tile.classList.add("is-dry");
-    const emoji = document.createElement("span");
-    emoji.className = "cal-tile-emoji";
-    emoji.textContent = DRY.emoji;
-    tile.appendChild(emoji);
-  } else {
+  } else if (entry) {
     tile.classList.add("is-drink");
-    const emoji = document.createElement("span");
-    emoji.className = "cal-tile-emoji";
-    emoji.textContent = dominantDrinkEmoji(entry);
-    tile.appendChild(emoji);
-    const total = dayTotal(entry);
-    if (total > 1) {
-      const badge = document.createElement("span");
-      badge.className = "cal-tile-badge";
-      badge.textContent = String(total);
-      tile.appendChild(badge);
-    }
+    const badge = document.createElement("span");
+    badge.className = "cal-tile-badge";
+    badge.textContent = String(dayTotal(entry));
+    tile.appendChild(badge);
   }
 
-  tile.addEventListener("click", () => handleTileTap(dateStr));
+  // Every tap opens the day-detail sheet, pre-populated with whatever's
+  // already logged (or blank) — there's no separate one-tap dry toggle.
+  tile.addEventListener("click", () => openDayEditor(dateStr));
 
-  // "+" affordance: only on unlogged/dry days (drink days already open the
-  // editor from the main tap). Kept as its own function per §7 so the
-  // interaction model can be swapped later without touching tile rendering.
-  if (!entry || entry.drinks.length === 0) {
-    const plus = document.createElement("button");
-    plus.type = "button";
-    plus.className = "cal-tile-plus";
-    plus.textContent = "+";
-    plus.setAttribute("aria-label", `Add drinks for ${dateStr}`);
-    plus.addEventListener("click", () => openDayEditor(dateStr));
-    cell.appendChild(plus);
-  }
-
-  return cell;
-}
-
-// The single named function that owns tile-tap behavior (§7), so the
-// alternative interaction model can be swapped in later without a rewrite.
-function handleTileTap(dateStr) {
-  const data = getData();
-  const entry = data.days[dateStr];
-  if (entry && entry.drinks.length > 0) {
-    openDayEditor(dateStr);
-    return;
-  }
-  // Unlogged or dry: toggle between the two, zero friction.
-  if (!entry) {
-    data.days[dateStr] = { drinks: [] };
-  } else {
-    delete data.days[dateStr];
-  }
-  setData(data);
-  renderHome();
+  return tile;
 }
 
 // ---- calendar month navigation (arrows + swipe) ----
@@ -547,11 +492,18 @@ $("btn-month-next").addEventListener("click", () => goToMonth(1));
   });
 })();
 
-// ------------------- more stats: rolling avg, trend, 6-month bars -------------------
+// ------------------- more stats: percentages, trend, 6-month bars -------------------
 
 function renderMoreStats(data, today) {
-  $("stat-dry-month").textContent = String(computeDryDaysThisMonth(data, today));
-  $("stat-dry-year").textContent = String(computeDryDaysThisYear(data, today));
+  const dryMonth = computeDryDaysThisMonth(data, today);
+  const dryYear = computeDryDaysThisYear(data, today);
+  const monthPct = Math.round((dryMonth / dayOfMonthOf(today)) * 100);
+  const yearPct = Math.round((dryYear / dayOfYear(today)) * 100);
+
+  $("stat-dry-month").textContent = String(dryMonth);
+  $("stat-dry-month-pct").textContent = `(${monthPct}%)`;
+  $("stat-dry-year").textContent = String(dryYear);
+  $("stat-dry-year-pct").textContent = `(${yearPct}%)`;
   $("stat-avg7").textContent = computeRollingAverage7(data, today).toFixed(1);
   $("stat-longest-ever").textContent = String(computeLongestStreakEver(data, today));
 
@@ -560,19 +512,33 @@ function renderMoreStats(data, today) {
 }
 
 function renderTrendChart(points) {
-  const max = Math.max(1, ...points);
-  const w = 300, h = 56;
+  const max = Math.max(0, ...points);
+  const w = 300, h = 82;
+  const topPad = 14, bottomPad = 8;
+  const plotH = h - topPad - bottomPad;
   const stepX = w / (points.length - 1 || 1);
-  const coords = points.map((v, i) => {
-    const x = i * stepX;
-    const y = h - (v / max) * (h - 6) - 3;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-  const svg = `
+
+  const yFor = (v) => max > 0 ? topPad + plotH - (v / max) * plotH : h - bottomPad;
+  const coords = points.map((v, i) => `${(i * stepX).toFixed(1)},${yFor(v).toFixed(1)}`);
+
+  let markers = "";
+  if (max > 0) {
+    const peakIdx = points.indexOf(max);
+    const lastIdx = points.length - 1;
+    const marked = new Set([peakIdx, lastIdx]);
+    for (const idx of marked) {
+      const cx = idx * stepX, cy = yFor(points[idx]);
+      const labelY = cy < 18 ? cy + 13 : cy - 8;
+      markers += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="2.5" fill="var(--accent)" />`;
+      markers += `<text x="${cx.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle">${points[idx]}</text>`;
+    }
+  }
+
+  $("trend-chart").innerHTML = `
     <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-      <polyline points="${coords.join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+      <polyline points="${coords.join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+      ${markers}
     </svg>`;
-  $("trend-chart").innerHTML = svg;
 }
 
 function renderBarChart(months) {
@@ -582,18 +548,25 @@ function renderBarChart(months) {
   for (const m of months) {
     const col = document.createElement("div");
     col.className = "bar-col";
+
+    const value = document.createElement("div");
+    value.className = "bar-value";
+    value.textContent = String(m.total);
+    col.appendChild(value);
+
     const track = document.createElement("div");
     track.className = "bar-track";
     const fill = document.createElement("div");
-    fill.className = "bar-fill" + (m.isPartial ? " is-partial" : "");
-    const pct = Math.max(2, (m.total / max) * 100);
-    fill.style.height = `${pct}%`;
+    fill.className = "bar-fill" + (m.isPartial ? " is-current" : "");
+    fill.style.height = `${Math.max(2, (m.total / max) * 100)}%`;
     track.appendChild(fill);
+    col.appendChild(track);
+
     const label = document.createElement("div");
     label.className = "bar-label";
     label.textContent = MONTH_NAMES[m.month1 - 1].slice(0, 3);
-    col.appendChild(track);
     col.appendChild(label);
+
     container.appendChild(col);
   }
 }
@@ -637,41 +610,46 @@ function renderDayEditor() {
   const weekday = dt.toLocaleDateString(undefined, { weekday: "long" });
   $("day-editor-date").textContent = `${weekday}, ${MONTH_NAMES[dt.getMonth()]} ${dt.getDate()}`;
 
-  // Chip row: tap adds one of that type.
-  const chipRow = $("day-editor-chips");
-  chipRow.innerHTML = "";
-  for (const type of DRINK_TYPES) {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "chip-btn";
-    chip.innerHTML = `<span class="chip-emoji">${type.emoji}</span><span>${escapeHtml(type.label)}</span>`;
-    chip.addEventListener("click", () => adjustDrink(dateStr, type.id, 1));
-    chipRow.appendChild(chip);
-  }
-
-  // Rows: one per type currently present, with a stepper.
-  const rows = $("day-editor-rows");
-  rows.innerHTML = "";
+  // One card per type: an inactive "+" affordance at count 0, a stepper once
+  // it's been tapped. No emoji — label only, per the redesign.
+  const grid = $("day-editor-types");
+  grid.innerHTML = "";
   for (const type of DRINK_TYPES) {
     const d = entry.drinks.find((x) => x.type === type.id);
-    if (!d) continue;
-    const row = document.createElement("div");
-    row.className = "drink-row";
-    row.innerHTML = `
-      <span class="drink-row-emoji">${type.emoji}</span>
-      <span class="drink-row-label">${escapeHtml(type.label)}</span>
-      <div class="stepper">
-        <button type="button" class="stepper-btn" data-action="dec">−</button>
-        <span class="stepper-count">${d.count}</span>
-        <button type="button" class="stepper-btn" data-action="inc">+</button>
-      </div>`;
-    row.querySelector('[data-action="dec"]').addEventListener("click", () => adjustDrink(dateStr, type.id, -1));
-    row.querySelector('[data-action="inc"]').addEventListener("click", () => adjustDrink(dateStr, type.id, 1));
-    rows.appendChild(row);
+    const count = d ? d.count : 0;
+
+    const card = document.createElement("div");
+    card.className = "type-card" + (count > 0 ? " is-active" : "");
+
+    const label = document.createElement("span");
+    label.className = "type-card-label";
+    label.textContent = type.label;
+    card.appendChild(label);
+
+    if (count === 0) {
+      const add = document.createElement("button");
+      add.type = "button";
+      add.className = "type-card-add";
+      add.textContent = "+";
+      add.setAttribute("aria-label", `Add ${type.label}`);
+      add.addEventListener("click", () => adjustDrink(dateStr, type.id, 1));
+      card.appendChild(add);
+    } else {
+      const stepper = document.createElement("div");
+      stepper.className = "type-stepper";
+      stepper.innerHTML = `
+        <button type="button" class="type-stepper-btn" data-action="dec">−</button>
+        <span class="type-stepper-count">${count}</span>
+        <button type="button" class="type-stepper-btn" data-action="inc">+</button>`;
+      stepper.querySelector('[data-action="dec"]').addEventListener("click", () => adjustDrink(dateStr, type.id, -1));
+      stepper.querySelector('[data-action="inc"]').addEventListener("click", () => adjustDrink(dateStr, type.id, 1));
+      card.appendChild(stepper);
+    }
+    grid.appendChild(card);
   }
 
   const total = dayTotal(entry);
-  $("day-editor-total").textContent = `${total} drink${total === 1 ? "" : "s"}`;
+  $("day-editor-total").textContent = `${total} drink${total === 1 ? "" : "s"} logged`;
 }
 
 // Adds/removes one drink of `typeId` for `dateStr`, writing straight
@@ -694,6 +672,9 @@ function adjustDrink(dateStr, typeId, delta) {
   renderHome();
 }
 
+// Mutually exclusive with logging drinks: marking a day alcohol-free clears
+// any counts for it, and logging a drink implicitly un-marks it (drinks.length
+// becomes > 0, which is exactly what "alcohol-free" checks against).
 $("btn-mark-dry").addEventListener("click", () => {
   const data = getData();
   data.days[state.editorDate] = { drinks: [] };
@@ -761,7 +742,7 @@ $("btn-get-started").addEventListener("click", () => {
 
 function renderSettings() {
   const data = getData();
-  $("settings-weekly-budget").value = data.settings.weeklyBudget;
+  $("settings-weekly-goal-value").textContent = String(data.settings.weeklyGoal);
   $("settings-share-url").checked = data.settings.shareIncludeUrl;
   $("confirm-delete-all").classList.add("hidden");
   state.deleteAllArmed = false;
@@ -770,13 +751,15 @@ function renderSettings() {
 $("btn-open-settings").addEventListener("click", () => showScreen("screen-settings"));
 $("btn-settings-back").addEventListener("click", () => showScreen("screen-home"));
 
-$("settings-weekly-budget").addEventListener("change", (e) => {
-  const n = Number(e.target.value);
+function adjustWeeklyGoal(delta) {
   const data = getData();
-  data.settings.weeklyBudget = Number.isFinite(n) && n >= 0 ? n : 7;
+  const next = Math.min(7, Math.max(1, data.settings.weeklyGoal + delta));
+  data.settings.weeklyGoal = next;
   setData(data);
-  e.target.value = data.settings.weeklyBudget;
-});
+  $("settings-weekly-goal-value").textContent = String(next);
+}
+$("btn-goal-dec").addEventListener("click", () => adjustWeeklyGoal(-1));
+$("btn-goal-inc").addEventListener("click", () => adjustWeeklyGoal(1));
 
 $("settings-share-url").addEventListener("change", (e) => {
   const data = getData();
@@ -786,20 +769,30 @@ $("settings-share-url").addEventListener("change", (e) => {
 
 $("btn-show-about").addEventListener("click", () => showScreen("screen-welcome"));
 
-// ---- backup / restore ----
+// ---- backup / restore / email ----
 
-$("btn-backup").addEventListener("click", () => {
+function buildBackupFile() {
   const data = getData();
   const json = JSON.stringify(data);
+  const filename = `one-less-backup-${todayStr()}.json`;
+  return { json, filename };
+}
+
+function downloadBackup(json, filename) {
   const blob = new Blob([json], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `one-less-backup-${todayStr()}.json`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+$("btn-backup").addEventListener("click", () => {
+  const { json, filename } = buildBackupFile();
+  downloadBackup(json, filename);
   toast("Backup downloaded");
 });
 
@@ -813,7 +806,7 @@ $("input-restore-file").addEventListener("change", (e) => {
   reader.onload = () => {
     let parsed;
     try {
-      parsed = JSON.parse(reader.result);
+      parsed = migrateData(JSON.parse(reader.result));
     } catch (err) {
       toast("That file isn't valid JSON — nothing was changed.", 4000);
       return;
@@ -829,6 +822,31 @@ $("input-restore-file").addEventListener("change", (e) => {
   };
   reader.onerror = () => toast("Couldn't read that file — nothing was changed.", 4000);
   reader.readAsText(file);
+});
+
+// mailto: links can't carry an attachment, so the fallback path downloads
+// the backup (same as "Back up") and opens a blank email with instructions
+// to attach the file that was just saved. Where the Web Share API supports
+// sharing files (iOS/Android), it's offered directly instead — Mail is one
+// of the targets in that share sheet.
+$("btn-email-backup").addEventListener("click", async () => {
+  const { json, filename } = buildBackupFile();
+
+  if (navigator.canShare) {
+    const file = new File([json], filename, { type: "application/json" });
+    if (navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: "One Less backup" });
+      } catch (e) { /* user cancelled — not an error */ }
+      return;
+    }
+  }
+
+  downloadBackup(json, filename);
+  const subject = encodeURIComponent("My One Less backup");
+  const body = encodeURIComponent(`Attached is my One Less backup (${filename}), just downloaded to this device — attach it from Downloads/Files before sending.`);
+  window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  toast("Backup downloaded — attach it to the email that opens");
 });
 
 // ---- delete all data (two-step confirm) ----

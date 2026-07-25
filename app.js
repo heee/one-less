@@ -824,29 +824,52 @@ $("input-restore-file").addEventListener("change", (e) => {
   reader.readAsText(file);
 });
 
-// mailto: links can't carry an attachment, so the fallback path downloads
-// the backup (same as "Back up") and opens a blank email with instructions
-// to attach the file that was just saved. Where the Web Share API supports
-// sharing files (iOS/Android), it's offered directly instead — Mail is one
-// of the targets in that share sheet.
-$("btn-email-backup").addEventListener("click", async () => {
-  const { json, filename } = buildBackupFile();
+// "Email" is a human-readable export, distinct from "Back up": a day-by-day
+// plain-text listing in the email body, not the JSON file. Sorted oldest to
+// newest so it reads like a log.
+function formatDayLine(dateStr, entry) {
+  const weekday = dateFromStr(dateStr).toLocaleDateString(undefined, { weekday: "short" });
+  if (entry.drinks.length === 0) return `${dateStr} (${weekday}): Alcohol-free`;
+  const parts = DRINK_TYPES
+    .map((type) => {
+      const d = entry.drinks.find((x) => x.type === type.id);
+      return d ? `${type.label} x${d.count}` : null;
+    })
+    .filter(Boolean);
+  const total = dayTotal(entry);
+  return `${dateStr} (${weekday}): ${parts.join(", ")} — ${total} drink${total === 1 ? "" : "s"} total`;
+}
 
-  if (navigator.canShare) {
-    const file = new File([json], filename, { type: "application/json" });
-    if (navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: "One Less backup" });
-      } catch (e) { /* user cancelled — not an error */ }
-      return;
-    }
+// mailto: URLs have no formal length limit, but older mail clients and OSes
+// start failing well before a year of daily entries would produce. If the
+// listing is too long, keep the most RECENT days (drop from the oldest end)
+// and say so, rather than silently truncating or failing to open Mail.
+const EMAIL_BODY_CHAR_BUDGET = 4000;
+
+function buildDataListingEmail() {
+  const data = getData();
+  const dates = Object.keys(data.days).sort(compareDateStr);
+  const lines = dates.map((d) => formatDayLine(d, data.days[d]));
+
+  let included = lines;
+  let omitted = 0;
+  while (included.join("\n").length > EMAIL_BODY_CHAR_BUDGET && included.length > 1) {
+    included = included.slice(1);
+    omitted++;
   }
 
-  downloadBackup(json, filename);
-  const subject = encodeURIComponent("My One Less backup");
-  const body = encodeURIComponent(`Attached is my One Less backup (${filename}), just downloaded to this device — attach it from Downloads/Files before sending.`);
-  window.location.href = `mailto:?subject=${subject}&body=${body}`;
-  toast("Backup downloaded — attach it to the email that opens");
+  const bodyLines = [`One Less — logged data (${lines.length} day${lines.length === 1 ? "" : "s"} total)`];
+  if (omitted > 0) {
+    bodyLines.push(`Showing the most recent ${included.length} of ${lines.length} — the earliest ${omitted} were left out to keep this email a reasonable size. Settings → Back up gives you the complete file.`);
+  }
+  bodyLines.push("", ...included);
+
+  return { subject: "One Less - My data", body: bodyLines.join("\n") };
+}
+
+$("btn-email-backup").addEventListener("click", () => {
+  const { subject, body } = buildDataListingEmail();
+  window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 });
 
 // ---- delete all data (two-step confirm) ----

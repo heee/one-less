@@ -29,14 +29,17 @@
   <section id="screen-welcome" class="screen active">
     <div class="welcome-body">
       <div class="welcome-center">
-        <div class="welcome-hero"></div>
+        <svg class="welcome-hero" viewBox="0 0 100 100" aria-hidden="true">
+          <circle cx="58" cy="50" r="22" fill="var(--accent)"/>
+          <polygon points="16,50 46.48,31.26 46.48,68.74" fill="var(--accent)"/>
+        </svg>
         <h1 class="screen-title brand-title welcome-title">One Less</h1>
         <p class="welcome-copy">
           A private, judgment-free way to see your drinking clearly.
           Everything stays on your device — nothing is shared unless you choose to.
         </p>
 
-        <div class="welcome-callout">
+        <div id="welcome-callout" class="welcome-callout">
           <div class="welcome-callout-title">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <rect x="6.5" y="2.5" width="11" height="19" rx="2.4"/><path d="M12 8.5v6"/><path d="M9 11.5h6"/>
@@ -46,9 +49,33 @@
           <p class="welcome-callout-copy">
             Keeps your data from being cleared. Share → Add to Home Screen.
           </p>
+          <div id="ios-add-steps" class="ios-add-steps hidden">
+            <div class="ios-add-step">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 15V3.5"/><path d="M8.5 7 12 3.5 15.5 7"/>
+                <path d="M6 12.5v6a1.5 1.5 0 0 0 1.5 1.5h9a1.5 1.5 0 0 0 1.5-1.5v-6"/>
+              </svg>
+              <span>Share</span>
+            </div>
+            <div class="ios-add-arrow">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h14"/><path d="M13 6l6 6-6 6"/></svg>
+            </div>
+            <div class="ios-add-step">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 9v6"/><path d="M9 12h6"/>
+              </svg>
+              <span>Add to Home Screen</span>
+            </div>
+          </div>
         </div>
 
         <p class="welcome-footnote">You can always back up your data from Settings → Back up.</p>
+      </div>
+      <div id="ios-bounce-hint" class="ios-bounce-hint hidden">
+        <span>Look for Share in Safari's toolbar</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="ios-bounce-arrow-icon">
+          <path d="M12 4v14"/><path d="M6 13l6 6 6-6"/>
+        </svg>
       </div>
 
       <button id="btn-get-started" type="button" class="btn btn-primary btn-large">Get started</button>
@@ -201,7 +228,7 @@
   <div id="day-editor-total" class="day-editor-total">0 drinks logged</div>
 
   <div class="sheet-actions">
-    <button id="btn-mark-dry" type="button" class="btn btn-secondary">Mark alcohol-free</button>
+    <button id="btn-mark-dry" type="button" class="btn btn-secondary">No drinks</button>
     <button id="btn-clear-day" type="button" class="btn btn-secondary">Clear</button>
     <button id="btn-day-done" type="button" class="btn btn-primary btn-done">Done</button>
   </div>

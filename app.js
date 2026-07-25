@@ -731,6 +731,34 @@ $("btn-catchup-dismiss").addEventListener("click", () => {
 
 // ------------------- welcome / onboarding -------------------
 
+// iOS has no API to trigger its own "Add to Home Screen" sheet — Apple never
+// exposed one, deliberately, so a page can't spam the prompt the way some
+// Android browsers' beforeinstallprompt gets abused. The closest honest
+// substitute: detect Safari-on-iOS running as a plain tab (not already
+// installed) and show a clearer two-step picture plus a nudge toward the
+// browser's own Share button, rather than a paragraph of instructions.
+function isIOSDevice() {
+  const isIOSUA = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isIPadOS13Plus = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  return isIOSUA || isIPadOS13Plus;
+}
+
+function isStandaloneDisplay() {
+  return window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches;
+}
+
+(function setupAddToHomeScreenHint() {
+  if (isStandaloneDisplay()) {
+    // Already installed — telling someone to add it again is just noise.
+    $("welcome-callout").classList.add("hidden");
+    return;
+  }
+  if (isIOSDevice()) {
+    $("ios-add-steps").classList.remove("hidden");
+    $("ios-bounce-hint").classList.remove("hidden");
+  }
+})();
+
 $("btn-get-started").addEventListener("click", () => {
   const data = getData();
   data.onboarded = true;

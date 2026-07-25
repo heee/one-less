@@ -21,6 +21,12 @@
   --shadow: 0 8px 24px rgba(60, 50, 35, 0.08);
   --radius: 18px;
   --radius-sm: 12px;
+
+  /* A display serif for the numbers and titles, a modern grotesque for the
+     interface. The pairing is what carries the tone — a single UI sans reads
+     utilitarian no matter how good it is. */
+  --font-display: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --font-ui: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -36,7 +42,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-ui);
   font-size: 16px;
   font-weight: 400;
   -webkit-tap-highlight-color: transparent;
@@ -66,18 +72,23 @@ button { cursor: pointer; }
   position: relative;
 }
 
+/* Side padding is deliberately tight: every card on the home screen spans the
+   full content width, and the calendar's seven tiles have to clear 44px inside
+   it. Widening the gutter here shrinks the tiles, not the cards. */
 .screen {
   display: none;
   flex: 1;
   flex-direction: column;
-  padding: 1.5rem 1.25rem 2.5rem;
+  padding: 1.5rem 0.75rem 2.5rem;
   min-height: 100%;
 }
 .screen.active { display: flex; }
 
 .screen-title {
-  font-size: 1.5rem;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: 1.85rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
   margin: 0 0 0.35rem;
   text-align: center;
 }
@@ -120,6 +131,18 @@ button { cursor: pointer; }
 }
 .icon-btn:active { transform: scale(0.92); }
 .icon-btn:disabled { opacity: 0.35; }
+
+/* Chrome-free variant for the home topbar: no fill, no border, no shadow, so
+   the controls sit quietly on the linen instead of competing with the cards.
+   Keeps the 44px hit area — only the visible box goes away. */
+.icon-btn-plain {
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: var(--ink-dim);
+}
+.icon-btn-plain svg { width: 21px; height: 21px; display: block; }
+.icon-btn-plain:active { color: var(--ink); transform: scale(0.9); }
 
 .text-input {
   width: 100%;
@@ -176,7 +199,21 @@ button { cursor: pointer; }
   justify-content: space-between;
   margin-bottom: 1.1rem;
 }
-.app-title { font-size: 1.35rem; font-weight: 600; margin: 0; }
+/* Negative right margin pulls the plain buttons' hit area past the card edge
+   so the glyphs optically line up with the cards below, not the padding. */
+.home-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin-right: -0.5rem;
+}
+.app-title {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  margin: 0;
+}
 
 /* ---------------- Stat strip ---------------- */
 
@@ -199,7 +236,13 @@ button { cursor: pointer; }
   min-width: 0;
 }
 .stat-icon { font-size: 1.3rem; }
-.stat-value { font-size: 1.25rem; font-weight: 600; line-height: 1.1; }
+.stat-value {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: 0.01em;
+}
 .stat-label { font-size: 0.72rem; color: var(--ink-dim); font-weight: 500; }
 .stat-sub { font-size: 0.68rem; color: var(--ink-dim); }
 .stat-sub.is-down { color: var(--accent); font-weight: 600; }
@@ -251,16 +294,15 @@ button { cursor: pointer; }
 
 /* ---------------- Calendar ---------------- */
 
-/* Pulled slightly wider than the screen's side padding and tightened inside:
-   the day tiles are the app's primary control, and at the default padding
-   seven of them across a 375px phone land at 39px — under the 44px minimum
-   touch target. The negative inline margin buys the grid back ~6px per tile. */
+/* Flush with the stat strip and the more-stats card — same left and right
+   edge on all three. Its inner padding is tighter than theirs so the day
+   tiles still clear 44px; that difference isn't visible, the card edge is. */
 .calendar-card {
   background: var(--surface);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 0.85rem 0.65rem;
-  margin: 0 -0.75rem 1.25rem;
+  padding: 0.85rem 0.5rem;
+  margin: 0 0 1.25rem;
 }
 .calendar-header {
   display: flex;
@@ -268,7 +310,12 @@ button { cursor: pointer; }
   justify-content: space-between;
   margin-bottom: 0.75rem;
 }
-.calendar-month-label { font-weight: 600; font-size: 1rem; }
+.calendar-month-label {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1.3rem;
+  letter-spacing: 0.01em;
+}
 
 .calendar-weekdays {
   display: grid;
@@ -283,7 +330,7 @@ button { cursor: pointer; }
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 0.3rem;
+  gap: 0.25rem;
   touch-action: pan-y;
 }
 
@@ -462,7 +509,6 @@ button { cursor: pointer; }
 
 /* ---------------- Home actions ---------------- */
 
-.home-actions { margin-top: auto; }
 
 /* ---------------- Bottom sheet (day editor) ---------------- */
 

@@ -186,7 +186,14 @@ button { cursor: pointer; }
   padding: 1.1rem 1.2rem;
   margin: 0.4rem 0;
 }
-.welcome-callout-title { font-weight: 600; margin-bottom: 0.5rem; }
+.welcome-callout-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+.welcome-callout-title svg { width: 18px; height: 18px; flex: none; color: var(--accent); }
 .welcome-callout-copy { color: var(--ink-dim); font-size: 0.9rem; line-height: 1.5; margin-bottom: 0.5rem; }
 .welcome-callout-steps { font-weight: 600; font-size: 0.92rem; }
 .welcome-footnote { text-align: center; color: var(--ink-dim); font-size: 0.85rem; }
@@ -235,7 +242,17 @@ button { cursor: pointer; }
   gap: 0.15rem;
   min-width: 0;
 }
-.stat-icon { font-size: 1.3rem; }
+/* Line icons in a single muted pine rather than full-colour emoji. They sit
+   under the numbers, not next to them — the figure is the content, the icon
+   is just a label. Drink emoji on the calendar tiles stay as they are: those
+   are the data, and they earn their colour. */
+.stat-icon {
+  color: var(--accent);
+  opacity: 0.65;
+  height: 18px;
+  margin-bottom: 0.15rem;
+}
+.stat-icon svg { width: 18px; height: 18px; display: block; }
 .stat-value {
   font-family: var(--font-display);
   font-size: 1.6rem;

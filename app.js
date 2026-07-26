@@ -217,6 +217,11 @@ function computeLongestStreakEver(data, today) {
 // Alcohol-free days within the current Monday-start week, counting only
 // days up to and including today (future days in the week haven't happened
 // yet, so they can't count toward the goal).
+// Also reports whether the goal is still mathematically reachable this
+// week, and whether `met` is currently at or above the pace needed to hit
+// it by Sunday — both drive the message on Home, so e.g. a Sunday with
+// nothing logged reads as "the goal's behind" rather than the flatly wrong
+// "on pace."
 function computeWeekGoalProgress(data, today) {
   const weekStart = startOfWeekMonday(today);
   let met = 0;
@@ -227,7 +232,19 @@ function computeWeekGoalProgress(data, today) {
     cursor = addDays(cursor, 1);
   }
   const goal = data.settings.weeklyGoal;
-  return { met, goal, remaining: Math.max(0, goal - met), fraction: goal > 0 ? Math.min(1, met / goal) : 0 };
+  const remaining = Math.max(0, goal - met);
+  const fraction = goal > 0 ? Math.min(1, met / goal) : 0;
+
+  const daysElapsed = mondayDow(today) + 1; // 1 (Mon) .. 7 (Sun)
+  const todayUndecided = !(today in data.days);
+  // Days with a settled outcome so far — excludes today while it's still
+  // unlogged, since it could yet turn out either way.
+  const decidedDaysSoFar = daysElapsed - (todayUndecided ? 1 : 0);
+  // Best case: every remaining day, including an undecided today, comes up dry.
+  const remainingOpportunities = (7 - daysElapsed) + (todayUndecided ? 1 : 0);
+  const maxPossibleMet = met + remainingOpportunities;
+
+  return { met, goal, remaining, fraction, decidedDaysSoFar, remainingOpportunities, maxPossibleMet };
 }
 
 // Total drinks from day 1 through `uptoDay` (inclusive) of the given
@@ -348,19 +365,39 @@ function renderHome() {
   renderMoreStats(data, today);
 }
 
+// Five states, checked in order: goal already met; goal now mathematically
+// impossible (not enough days left, however the rest of the week goes);
+// too early in the week to judge pace at all; on pace; behind pace but
+// still possible. Each gets its own honest, non-shaming message rather than
+// a blanket "on pace" that's wrong for most of these.
 function renderGoalCard(data, today) {
-  const { met, goal, remaining, fraction } = computeWeekGoalProgress(data, today);
-  const deg = fraction * 360;
+  const p = computeWeekGoalProgress(data, today);
+  const deg = p.fraction * 360;
   $("goal-ring").style.background = `conic-gradient(var(--accent) 0deg ${deg}deg, var(--border) ${deg}deg 360deg)`;
-  $("goal-ring-value").textContent = `${met}/${goal}`;
+  $("goal-ring-value").textContent = `${p.met}/${p.goal}`;
 
-  if (met >= goal) {
-    $("goal-text-title").textContent = "Goal met this week";
-    $("goal-text-sub").textContent = `You've logged ${met} alcohol-free day${met === 1 ? "" : "s"} — nice work.`;
+  const s = (n) => (n === 1 ? "" : "s");
+  let title, sub;
+
+  if (p.met >= p.goal) {
+    title = "Goal met this week";
+    sub = `You've logged ${p.met} alcohol-free day${s(p.met)} — nice work.`;
+  } else if (p.maxPossibleMet < p.goal) {
+    title = "This week's goal is behind";
+    sub = `${p.met} of ${p.goal} logged this week. There's always next week.`;
+  } else if (p.decidedDaysSoFar === 0) {
+    title = "New week, fresh start";
+    sub = `${p.remaining} alcohol-free day${s(p.remaining)} this week would hit your goal.`;
+  } else if (p.met * 7 >= p.goal * p.decidedDaysSoFar) {
+    title = "On pace this week";
+    sub = `${p.remaining} more alcohol-free day${s(p.remaining)} to hit your goal.`;
   } else {
-    $("goal-text-title").textContent = "On pace this week";
-    $("goal-text-sub").textContent = `${remaining} more alcohol-free day${remaining === 1 ? "" : "s"} to hit your goal.`;
+    title = "Behind pace, still possible";
+    sub = `Log ${p.remaining} more in the ${p.remainingOpportunities} day${s(p.remainingOpportunities)} left to hit your goal.`;
   }
+
+  $("goal-text-title").textContent = title;
+  $("goal-text-sub").textContent = sub;
 }
 
 function renderCatchupBanner(data, today) {

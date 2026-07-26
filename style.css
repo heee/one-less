@@ -289,6 +289,8 @@ button { cursor: pointer; }
   align-items: center;
   justify-content: space-between;
 }
+.home-brand { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+.home-icon { width: 24px; height: 24px; flex: none; }
 .app-title { font-size: 1.625rem; }
 
 /* The Settings entry: a filled circle with a plain three-bar mark, doubling

@@ -93,15 +93,9 @@ function readPng(filePath) {
 // exposed band instead of the background gradient it sits on.
 const EDGE_INSET = 6;
 
-// Shifts the shape to sit centered in its canvas, based on the bounding box
-// of pixels that differ from the background (sampled just inside the edge
-// artifact, which the shape's own margin guarantees is still background).
-// The background is a faint gradient, not a flat color, so rows/columns
-// exposed by the shift are filled by clamping to the nearest safe edge of
-// the source (repeating that row/column) rather than a flat fill — a flat
-// fill, and even a naive clamp to the literal last row/column, left a
-// visible seam where it met the real gradient or the border artifact.
-function recenter(img) {
+// Finds the pixel bounding box of the shape: anything far enough (in color)
+// from the background, sampled just inside the edge artifact.
+function detectBBox(img) {
   const { width, height, pixels } = img;
   const bgOff = (EDGE_INSET * width + EDGE_INSET) * 4;
   const bg = [pixels[bgOff], pixels[bgOff + 1], pixels[bgOff + 2]];
@@ -119,6 +113,18 @@ function recenter(img) {
       }
     }
   }
+  return { minX, maxX, minY, maxY };
+}
+
+// Shifts the shape to sit centered in its canvas, based on its bounding box.
+// The background is a faint gradient, not a flat color, so rows/columns
+// exposed by the shift are filled by clamping to the nearest safe edge of
+// the source (repeating that row/column) rather than a flat fill — a flat
+// fill, and even a naive clamp to the literal last row/column, left a
+// visible seam where it met the real gradient or the border artifact.
+function recenter(img) {
+  const { width, height, pixels } = img;
+  const { minX, maxX, minY, maxY } = detectBBox(img);
 
   const shiftX = minX - Math.round((width - (maxX - minX + 1)) / 2);
   const shiftY = minY - Math.round((height - (maxY - minY + 1)) / 2);
@@ -135,6 +141,53 @@ function recenter(img) {
       out[dstOff + 1] = pixels[srcOff + 1];
       out[dstOff + 2] = pixels[srcOff + 2];
       out[dstOff + 3] = pixels[srcOff + 3];
+    }
+  }
+  return { width, height, pixels: out };
+}
+
+// Bilinear sample at fractional coordinates (fx, fy), which must already be
+// clamped to [0, width-1] / [0, height-1] by the caller.
+function samplePixel(img, fx, fy) {
+  const { width, pixels } = img;
+  const x0 = Math.floor(fx), y0 = Math.floor(fy);
+  const x1 = Math.min(width - 1, x0 + 1), y1 = Math.min(img.height - 1, y0 + 1);
+  const tx = fx - x0, ty = fy - y0;
+  const off00 = (y0 * width + x0) * 4, off10 = (y0 * width + x1) * 4;
+  const off01 = (y1 * width + x0) * 4, off11 = (y1 * width + x1) * 4;
+  const out = [0, 0, 0, 0];
+  for (let c = 0; c < 4; c++) {
+    const top = pixels[off00 + c] * (1 - tx) + pixels[off10 + c] * tx;
+    const bot = pixels[off01 + c] * (1 - tx) + pixels[off11 + c] * tx;
+    out[c] = top * (1 - ty) + bot * ty;
+  }
+  return out;
+}
+
+// The masters export the drop with a lot of surrounding canvas — on an
+// actual home screen that reads as a small glyph floating in a big pale
+// frame. This zooms in on the (already re-centered) shape around its own
+// center until its longer bounding-box dimension fills `targetFraction` of
+// the canvas, cropping the excess margin equally on every side.
+function scaleToFill(img, targetFraction) {
+  const { width, height } = img;
+  const { minX, maxX, minY, maxY } = detectBBox(img);
+  const bboxSize = Math.max(maxX - minX + 1, maxY - minY + 1);
+  const scale = (targetFraction * width) / bboxSize;
+  if (scale <= 1.001) return img;
+
+  const cx = width / 2, cy = height / 2;
+  const out = Buffer.alloc(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const fx = Math.max(0, Math.min(width - 1, cx + (x - cx) / scale));
+      const fy = Math.max(0, Math.min(height - 1, cy + (y - cy) / scale));
+      const [r, g, b, a] = samplePixel(img, fx, fy);
+      const dstOff = (y * width + x) * 4;
+      out[dstOff] = Math.round(r);
+      out[dstOff + 1] = Math.round(g);
+      out[dstOff + 2] = Math.round(b);
+      out[dstOff + 3] = Math.round(a);
     }
   }
   return { width, height, pixels: out };
@@ -210,13 +263,21 @@ function writePng(filePath, img) {
   fs.writeFileSync(filePath, png);
 }
 
+// How much of the canvas the drop's longer bounding-box dimension should
+// fill. manifest.json also serves these as maskable icons, whose spec
+// guarantees only a centered 80%-diameter safe zone survives every mask
+// shape (i.e. content must stay within 40% of the canvas size from center);
+// 0.75 leaves a comfortable margin inside that on the drop's on-axis tip and
+// crown, which are its only extremities anywhere near the safe-zone edge.
+const TARGET_FILL_FRACTION = 0.75;
+
 function main() {
   const assetsDir = path.join(__dirname, "..", "assets");
   const outDir = path.join(__dirname, "..", "icons");
   fs.mkdirSync(outDir, { recursive: true });
 
   const masterPath = path.join(assetsDir, "app-icon-1024.png");
-  const master = recenter(readPng(masterPath));
+  const master = scaleToFill(recenter(readPng(masterPath)), TARGET_FILL_FRACTION);
   writePng(masterPath, master);
   for (const size of [192, 512]) {
     const resized = size === master.width ? master : resample(master, size);
@@ -227,7 +288,7 @@ function main() {
   // The 180x180 apple-touch-icon is used as-is — it's already the exact
   // target size, no resampling needed.
   const touchPath = path.join(assetsDir, "apple-touch-icon-180.png");
-  const touch = recenter(readPng(touchPath));
+  const touch = scaleToFill(recenter(readPng(touchPath)), TARGET_FILL_FRACTION);
   writePng(touchPath, touch);
   writePng(path.join(outDir, "apple-touch-icon.png"), touch);
   console.log("wrote", "apple-touch-icon.png");

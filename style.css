@@ -596,6 +596,18 @@ button { cursor: pointer; }
 }
 .sheet-title { text-align: center; font-size: 1.125rem; font-weight: 700; margin-bottom: 1rem; }
 
+.sheet-close {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.75rem;
+  z-index: 1;
+  width: 2.25rem;
+  height: 2.25rem;
+  min-width: 36px;
+  min-height: 36px;
+  font-size: 1.25rem;
+}
+
 .type-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

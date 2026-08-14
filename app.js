@@ -617,11 +617,17 @@ function openDayEditor(dateStr) {
   $("day-editor").classList.remove("hidden");
 }
 
-function closeDayEditor() {
+// `cancelCatchup` distinguishes "I decided this day, move on" (Done, No
+// drinks, Clear — advances the queue) from "let me out" (X, tapping the
+// backdrop, swiping down — stops the auto-advance so the sheet doesn't just
+// pop back open for the next overdue day). The banner still reflects the
+// true count of unlogged days either way, since it's recomputed from data.
+function closeDayEditor(cancelCatchup) {
   $("sheet-backdrop").classList.add("hidden");
   $("day-editor").classList.add("hidden");
   state.editorDate = null;
   renderHome();
+  if (cancelCatchup) { state.catchupQueue = []; return; }
   advanceCatchupQueue();
 }
 
@@ -728,7 +734,9 @@ $("btn-clear-day").addEventListener("click", () => {
 
 $("btn-day-done").addEventListener("click", () => closeDayEditor());
 
-$("sheet-backdrop").addEventListener("click", () => closeDayEditor());
+$("btn-day-editor-close").addEventListener("click", () => closeDayEditor(true));
+
+$("sheet-backdrop").addEventListener("click", () => closeDayEditor(true));
 
 (function setupSheetSwipeDown() {
   const sheet = $("day-editor");
@@ -750,7 +758,7 @@ $("sheet-backdrop").addEventListener("click", () => closeDayEditor());
     if (!tracking) return;
     tracking = false;
     sheet.style.transform = "";
-    if (currentDy > 80) closeDayEditor();
+    if (currentDy > 80) closeDayEditor(true);
   });
 })();
 

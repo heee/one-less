@@ -87,13 +87,23 @@ function readPng(filePath) {
   return { width, height, pixels };
 }
 
+// Both masters carry a 1px bright edge artifact hugging all four canvas
+// borders (likely a resize/export halo) — clamping must land inside this
+// border, or a shift replicates that single bright edge across the whole
+// exposed band instead of the background gradient it sits on.
+const EDGE_INSET = 6;
+
 // Shifts the shape to sit centered in its canvas, based on the bounding box
-// of pixels that differ from the background (sampled from a corner, which
-// the shape's own margin guarantees is background). Rows/columns exposed by
-// the shift are filled with that same background color.
+// of pixels that differ from the background (sampled just inside the edge
+// artifact, which the shape's own margin guarantees is still background).
+// The background is a faint gradient, not a flat color, so rows/columns
+// exposed by the shift are filled by clamping to the nearest safe edge of
+// the source (repeating that row/column) rather than a flat fill — a flat
+// fill, and even a naive clamp to the literal last row/column, left a
+// visible seam where it met the real gradient or the border artifact.
 function recenter(img) {
   const { width, height, pixels } = img;
-  const bgOff = (2 * width + 2) * 4;
+  const bgOff = (EDGE_INSET * width + EDGE_INSET) * 4;
   const bg = [pixels[bgOff], pixels[bgOff + 1], pixels[bgOff + 2]];
 
   let minX = width, maxX = -1, minY = height, maxY = -1;
@@ -118,16 +128,13 @@ function recenter(img) {
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const dstOff = (y * width + x) * 4;
-      const srcX = x + shiftX, srcY = y + shiftY;
-      if (srcX >= 0 && srcX < width && srcY >= 0 && srcY < height) {
-        const srcOff = (srcY * width + srcX) * 4;
-        out[dstOff] = pixels[srcOff];
-        out[dstOff + 1] = pixels[srcOff + 1];
-        out[dstOff + 2] = pixels[srcOff + 2];
-        out[dstOff + 3] = pixels[srcOff + 3];
-      } else {
-        out[dstOff] = bg[0]; out[dstOff + 1] = bg[1]; out[dstOff + 2] = bg[2]; out[dstOff + 3] = 255;
-      }
+      const srcX = Math.min(width - 1 - EDGE_INSET, Math.max(EDGE_INSET, x + shiftX));
+      const srcY = Math.min(height - 1 - EDGE_INSET, Math.max(EDGE_INSET, y + shiftY));
+      const srcOff = (srcY * width + srcX) * 4;
+      out[dstOff] = pixels[srcOff];
+      out[dstOff + 1] = pixels[srcOff + 1];
+      out[dstOff + 2] = pixels[srcOff + 2];
+      out[dstOff + 3] = pixels[srcOff + 3];
     }
   }
   return { width, height, pixels: out };

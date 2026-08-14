@@ -284,6 +284,8 @@ button { cursor: pointer; }
 
 /* ---------------- Home topbar ---------------- */
 
+#screen-home { padding-top: 1.5rem; }
+
 .home-topbar {
   display: flex;
   align-items: center;
@@ -699,6 +701,24 @@ button { cursor: pointer; }
   gap: 1rem;
 }
 .settings-row-label { font-weight: 500; font-size: 0.94rem; }
+
+.goal-type-picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+.goal-type-option {
+  background: var(--surface-white);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.55rem 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-dim);
+  text-align: center;
+  min-height: 0;
+}
+.goal-type-option.is-active { background: var(--accent-soft); color: var(--ink); }
 
 .mini-stepper { display: flex; align-items: center; gap: 0.7rem; }
 .mini-stepper-btn {

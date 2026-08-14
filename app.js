@@ -21,6 +21,15 @@ const DRINK_TYPES = [
   { id: "other", label: "Other" },
 ];
 
+// The three ways Home's goal card can measure progress. `field` is the
+// settings key holding the target number; each type keeps its own field so
+// switching types in Settings never loses the other types' targets.
+const GOAL_TYPES = {
+  dryDays: { field: "weeklyGoal", label: "Alcohol-free days goal / week", pickerLabel: "Dry days", min: 1, max: 7, default: 5 },
+  drinkBudget: { field: "weeklyDrinkBudget", label: "Weekly drink budget", pickerLabel: "Drink budget", min: 1, max: 30, default: 7 },
+  streak: { field: "streakGoal", label: "Dry-streak target (days)", pickerLabel: "Streak", min: 3, max: 90, default: 30 },
+};
+
 const state = {
   screen: "screen-welcome",
   viewYear: 0,
@@ -106,17 +115,27 @@ function compareDateStr(a, b) { return a < b ? -1 : a > b ? 1 : 0; }
 
 function defaultData() {
   const today = todayStr();
-  return { v: 1, startedOn: today, onboarded: false, days: {}, settings: { weeklyGoal: 5, shareIncludeUrl: true } };
+  return {
+    v: 1, startedOn: today, onboarded: false, days: {},
+    settings: { goalType: "dryDays", weeklyGoal: 5, weeklyDrinkBudget: 7, streakGoal: 30, shareIncludeUrl: true },
+  };
 }
 
-// Old builds tracked a weekly drink *budget*; the redesign tracks a weekly
+// Old builds tracked a weekly drink *budget*; the redesign tracked a weekly
 // alcohol-free-days *goal* instead — a different metric, not a rename, so
 // there's no sensible numeric conversion. Anything missing the new field
-// just gets the new default.
+// just gets the new default. Later, goal-type selection reintroduced a
+// drink budget alongside a streak target as alternatives, not a replacement
+// — each type keeps its own field, defaulted independently if missing.
 function migrateData(obj) {
   if (obj && obj.settings && typeof obj.settings.weeklyGoal !== "number") {
     delete obj.settings.weeklyBudget;
     obj.settings.weeklyGoal = 5;
+  }
+  if (obj && obj.settings) {
+    if (!GOAL_TYPES[obj.settings.goalType]) obj.settings.goalType = "dryDays";
+    if (typeof obj.settings.weeklyDrinkBudget !== "number") obj.settings.weeklyDrinkBudget = 7;
+    if (typeof obj.settings.streakGoal !== "number") obj.settings.streakGoal = 30;
   }
   return obj;
 }
@@ -136,6 +155,9 @@ function isValidDataShape(obj) {
   }
   if (!obj.settings || typeof obj.settings !== "object") return false;
   if (typeof obj.settings.weeklyGoal !== "number") return false;
+  if (!GOAL_TYPES[obj.settings.goalType]) return false;
+  if (typeof obj.settings.weeklyDrinkBudget !== "number") return false;
+  if (typeof obj.settings.streakGoal !== "number") return false;
   if (typeof obj.settings.shareIncludeUrl !== "boolean") return false;
   return true;
 }
@@ -245,6 +267,46 @@ function computeWeekGoalProgress(data, today) {
   const maxPossibleMet = met + remainingOpportunities;
 
   return { met, goal, remaining, fraction, decidedDaysSoFar, remainingOpportunities, maxPossibleMet };
+}
+
+// Same Monday-start week window as computeWeekGoalProgress, but for a
+// "stay under N drinks" budget instead of a dry-days count. Unlike the
+// dry-days goal, going over is unrecoverable within the week — no later day
+// can undo drinks already logged — so pace only matters while still under.
+function computeWeekBudgetProgress(data, today) {
+  const weekStart = startOfWeekMonday(today);
+  let used = 0;
+  let cursor = weekStart;
+  while (compareDateStr(cursor, today) <= 0) {
+    used += dayTotal(data.days[cursor]);
+    cursor = addDays(cursor, 1);
+  }
+  const budget = data.settings.weeklyDrinkBudget;
+  const remaining = Math.max(0, budget - used);
+  const fraction = budget > 0 ? Math.min(1, used / budget) : 0;
+
+  const daysElapsed = mondayDow(today) + 1; // 1 (Mon) .. 7 (Sun)
+  const todayUndecided = !(today in data.days);
+  const decidedDaysSoFar = daysElapsed - (todayUndecided ? 1 : 0);
+  const remainingOpportunities = (7 - daysElapsed) + (todayUndecided ? 1 : 0);
+  const overBudget = used > budget;
+  const weekSettled = daysElapsed === 7 && !todayUndecided;
+  // On pace: spend so far is at or under the even daily rate for the days
+  // that have actually settled (mirrors the dry-days pace check, inverted).
+  const onPace = decidedDaysSoFar === 0 || used * 7 <= budget * decidedDaysSoFar;
+
+  return { used, budget, remaining, fraction, decidedDaysSoFar, remainingOpportunities, overBudget, weekSettled, onPace };
+}
+
+// Progress toward a target dry-streak length. Unlike the other two goal
+// types this has no weekly reset — the streak either keeps growing or
+// breaks to zero on a logged drinking day.
+function computeStreakGoalProgress(data, today) {
+  const streak = computeDryStreak(data, today);
+  const target = data.settings.streakGoal;
+  const remaining = Math.max(0, target - streak);
+  const fraction = target > 0 ? Math.min(1, streak / target) : 0;
+  return { streak, target, remaining, fraction };
 }
 
 // Total drinks from day 1 through `uptoDay` (inclusive) of the given
@@ -365,18 +427,30 @@ function renderHome() {
   renderMoreStats(data, today);
 }
 
+const s = (n) => (n === 1 ? "" : "s");
+
+function setGoalCard(fraction, ringValue, title, sub) {
+  const deg = fraction * 360;
+  $("goal-ring").style.background = `conic-gradient(var(--accent) 0deg ${deg}deg, var(--border) ${deg}deg 360deg)`;
+  $("goal-ring-value").textContent = ringValue;
+  $("goal-text-title").textContent = title;
+  $("goal-text-sub").textContent = sub;
+}
+
+// Dispatches to the render for whichever goal type is active in Settings.
+function renderGoalCard(data, today) {
+  if (data.settings.goalType === "drinkBudget") renderGoalCardBudget(data, today);
+  else if (data.settings.goalType === "streak") renderGoalCardStreak(data, today);
+  else renderGoalCardDryDays(data, today);
+}
+
 // Five states, checked in order: goal already met; goal now mathematically
 // impossible (not enough days left, however the rest of the week goes);
 // too early in the week to judge pace at all; on pace; behind pace but
 // still possible. Each gets its own honest, non-shaming message rather than
 // a blanket "on pace" that's wrong for most of these.
-function renderGoalCard(data, today) {
+function renderGoalCardDryDays(data, today) {
   const p = computeWeekGoalProgress(data, today);
-  const deg = p.fraction * 360;
-  $("goal-ring").style.background = `conic-gradient(var(--accent) 0deg ${deg}deg, var(--border) ${deg}deg 360deg)`;
-  $("goal-ring-value").textContent = `${p.met}/${p.goal}`;
-
-  const s = (n) => (n === 1 ? "" : "s");
   let title, sub;
 
   if (p.met >= p.goal) {
@@ -396,8 +470,55 @@ function renderGoalCard(data, today) {
     sub = `Log ${p.remaining} more in the ${p.remainingOpportunities} day${s(p.remainingOpportunities)} left to hit your goal.`;
   }
 
-  $("goal-text-title").textContent = title;
-  $("goal-text-sub").textContent = sub;
+  setGoalCard(p.fraction, `${p.met}/${p.goal}`, title, sub);
+}
+
+// Four states, checked in order: already over budget (unrecoverable this
+// week); week fully settled and still under; too early to judge pace; on
+// pace or above pace. Ring fraction here tracks *spend*, not progress — a
+// full ring means the budget is used up, not that the goal was hit.
+function renderGoalCardBudget(data, today) {
+  const p = computeWeekBudgetProgress(data, today);
+  let title, sub;
+
+  if (p.overBudget) {
+    title = "Over budget this week";
+    sub = `You've logged ${p.used} of ${p.budget} drinks — ${p.used - p.budget} over.`;
+  } else if (p.weekSettled) {
+    title = "Budget met this week";
+    sub = `You stayed at ${p.used} of ${p.budget} drinks this week — nice work.`;
+  } else if (p.decidedDaysSoFar === 0) {
+    title = "New week, fresh start";
+    sub = `${p.remaining} drink${s(p.remaining)} left in your ${p.budget}-drink weekly budget.`;
+  } else if (p.onPace) {
+    title = "On pace this week";
+    sub = `${p.remaining} drink${s(p.remaining)} left in your budget, ${p.remainingOpportunities} day${s(p.remainingOpportunities)} to go.`;
+  } else {
+    title = "Above pace this week";
+    sub = `${p.remaining} drink${s(p.remaining)} left — pace it out over the ${p.remainingOpportunities} day${s(p.remainingOpportunities)} left.`;
+  }
+
+  setGoalCard(p.fraction, `${p.used}/${p.budget}`, title, sub);
+}
+
+// Three states: target reached, streak still at zero, or building toward
+// it. No pace logic — there's no deadline, just the running streak.
+function renderGoalCardStreak(data, today) {
+  const p = computeStreakGoalProgress(data, today);
+  let title, sub;
+
+  if (p.streak >= p.target) {
+    title = "Streak goal reached";
+    sub = `${p.streak}-day streak — past your ${p.target}-day goal.`;
+  } else if (p.streak === 0) {
+    title = "Start your streak";
+    sub = `${p.target} alcohol-free day${s(p.target)} in a row would hit your goal.`;
+  } else {
+    title = "Building your streak";
+    sub = `${p.remaining} more day${s(p.remaining)} to reach your ${p.target}-day goal.`;
+  }
+
+  setGoalCard(p.fraction, `${p.streak}/${p.target}`, title, sub);
 }
 
 function renderCatchupBanner(data, today) {
@@ -815,7 +936,12 @@ $("btn-get-started").addEventListener("click", () => {
 
 function renderSettings() {
   const data = getData();
-  $("settings-weekly-goal-value").textContent = String(data.settings.weeklyGoal);
+  const type = GOAL_TYPES[data.settings.goalType];
+  document.querySelectorAll(".goal-type-option").forEach((btn) => {
+    btn.classList.toggle("is-active", btn.dataset.goalType === data.settings.goalType);
+  });
+  $("settings-goal-label").textContent = type.label;
+  $("settings-goal-value").textContent = String(data.settings[type.field]);
   $("settings-share-url").checked = data.settings.shareIncludeUrl;
   $("confirm-delete-all").classList.add("hidden");
   state.deleteAllArmed = false;
@@ -824,15 +950,25 @@ function renderSettings() {
 $("btn-open-settings").addEventListener("click", () => showScreen("screen-settings"));
 $("btn-settings-back").addEventListener("click", () => showScreen("screen-home"));
 
-function adjustWeeklyGoal(delta) {
+document.querySelectorAll(".goal-type-option").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const data = getData();
+    data.settings.goalType = btn.dataset.goalType;
+    setData(data);
+    renderSettings();
+  });
+});
+
+function adjustGoalValue(delta) {
   const data = getData();
-  const next = Math.min(7, Math.max(1, data.settings.weeklyGoal + delta));
-  data.settings.weeklyGoal = next;
+  const type = GOAL_TYPES[data.settings.goalType];
+  const next = Math.min(type.max, Math.max(type.min, data.settings[type.field] + delta));
+  data.settings[type.field] = next;
   setData(data);
-  $("settings-weekly-goal-value").textContent = String(next);
+  $("settings-goal-value").textContent = String(next);
 }
-$("btn-goal-dec").addEventListener("click", () => adjustWeeklyGoal(-1));
-$("btn-goal-inc").addEventListener("click", () => adjustWeeklyGoal(1));
+$("btn-goal-dec").addEventListener("click", () => adjustGoalValue(-1));
+$("btn-goal-inc").addEventListener("click", () => adjustGoalValue(1));
 
 $("settings-share-url").addEventListener("change", (e) => {
   const data = getData();

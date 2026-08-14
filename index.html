@@ -173,11 +173,16 @@
 
     <div class="settings-block">
       <h2 class="settings-eyebrow">Tracking</h2>
+      <div class="goal-type-picker">
+        <button type="button" class="goal-type-option" data-goal-type="dryDays">Dry days</button>
+        <button type="button" class="goal-type-option" data-goal-type="drinkBudget">Drink budget</button>
+        <button type="button" class="goal-type-option" data-goal-type="streak">Streak</button>
+      </div>
       <div class="settings-row">
-        <span class="settings-row-label">Alcohol-free days goal / week</span>
+        <span id="settings-goal-label" class="settings-row-label">Alcohol-free days goal / week</span>
         <div class="mini-stepper">
           <button id="btn-goal-dec" type="button" class="mini-stepper-btn">−</button>
-          <span id="settings-weekly-goal-value" class="mini-stepper-count">5</span>
+          <span id="settings-goal-value" class="mini-stepper-count">5</span>
           <button id="btn-goal-inc" type="button" class="mini-stepper-btn">+</button>
         </div>
       </div>

@@ -189,7 +189,7 @@ button { cursor: pointer; }
   justify-content: center;
   gap: 0.9rem;
 }
-/* Same silhouette as the app icon (a teardrop pointing left) drawn as an
+/* Same silhouette as the app icon (a teardrop pointing down) drawn as an
    inline SVG rather than a raster image, so it stays crisp at any size and
    needs no separate asset. */
 .welcome-hero {

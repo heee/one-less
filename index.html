@@ -92,9 +92,14 @@
         </svg>
         <h1 class="app-title brand-title">One Less</h1>
       </div>
-      <button id="btn-open-settings" type="button" class="menu-btn" aria-label="Settings" title="Settings">
-        <span></span><span></span><span></span>
-      </button>
+      <div class="home-actions">
+        <button id="btn-open-drinks" type="button" class="insights-btn" aria-label="Drink insights" title="Drink insights">
+          <span></span><span></span><span></span>
+        </button>
+        <button id="btn-open-settings" type="button" class="menu-btn" aria-label="Settings" title="Settings">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
     </div>
 
     <div class="goal-card">
@@ -132,7 +137,15 @@
     <div class="more-stats">
       <div class="more-stats-header">
         <h2 class="section-title">More stats</h2>
-        <button id="btn-share" type="button" class="share-link">Share progress ↗</button>
+        <button id="btn-share" type="button" class="share-link">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="18" cy="5" r="2.5"></circle>
+            <circle cx="6" cy="12" r="2.5"></circle>
+            <circle cx="18" cy="19" r="2.5"></circle>
+            <path d="m8.2 10.8 7.6-4.5M8.2 13.2l7.6 4.5"></path>
+          </svg>
+          <span>Share</span>
+        </button>
       </div>
       <div class="stat-row">
         <span>Alcohol-free days this month</span>
@@ -162,6 +175,46 @@
       <div id="bar-chart" class="bar-chart"></div>
     </div>
 
+  </section>
+
+  <!-- ============ SCREEN: DRINK INSIGHTS ============ -->
+  <section id="screen-drinks" class="screen">
+    <div class="insights-topbar">
+      <div class="insights-title-group">
+        <button id="btn-drinks-back" type="button" class="icon-btn" aria-label="Back" title="Back">←</button>
+        <h1 class="screen-title">Your drinks</h1>
+      </div>
+      <div class="period-picker" role="group" aria-label="Statistics period">
+        <button type="button" class="period-option" data-period="week" aria-label="Last 7 days" title="Week">W</button>
+        <button type="button" class="period-option" data-period="month" aria-label="Last 30 days" title="Month">M</button>
+        <button type="button" class="period-option" data-period="quarter" aria-label="Last 3 months" title="Quarter">Q</button>
+        <button type="button" class="period-option" data-period="year" aria-label="Last year" title="Year">Y</button>
+      </div>
+    </div>
+
+    <div class="insights-summary">
+      <p id="drinks-period-label" class="insights-period-label">Last 30 days</p>
+      <div class="insights-total-row">
+        <div>
+          <strong id="drinks-total" class="insights-total">0</strong>
+          <span class="insights-total-unit">drinks</span>
+        </div>
+        <span id="drinks-leader" class="leader-summary">No drinks logged</span>
+      </div>
+      <div class="insights-summary-stats">
+        <div><strong id="drinks-named-total">0</strong><span>named</span></div>
+        <div><strong id="drinks-distinct-total">0</strong><span>different drinks</span></div>
+        <div><strong id="drinks-named-percent">0%</strong><span>identified</span></div>
+      </div>
+    </div>
+
+    <div class="category-section-head">
+      <div>
+        <h2 class="section-title">By category</h2>
+        <p>Each thermometer is scaled to the leading category.</p>
+      </div>
+    </div>
+    <div id="drink-category-stats" class="drink-category-stats"></div>
   </section>
 
   <!-- ============ SCREEN: SETTINGS ============ -->
@@ -237,6 +290,7 @@
   <h2 id="day-editor-date" class="sheet-title">Date</h2>
 
   <div id="day-editor-types" class="type-grid"></div>
+  <div id="day-editor-details" class="drink-details hidden"></div>
   <div id="day-editor-total" class="day-editor-total">0 drinks logged</div>
 
   <div class="sheet-actions">

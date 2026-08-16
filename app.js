@@ -13,12 +13,12 @@ const LS_DATA_KEY = "ol-data";
 const APP_SHARE_URL = "https://heee.github.io/one-less/";
 
 const DRINK_TYPES = [
-  { id: "wine", label: "Wine" },
-  { id: "beer", label: "Beer" },
-  { id: "cocktail", label: "Cocktail" },
-  { id: "spirits", label: "Spirits" },
-  { id: "bubbles", label: "Bubbles" },
-  { id: "other", label: "Other" },
+  { id: "wine", label: "Wine", color: "#8E5A62" },
+  { id: "beer", label: "Beer", color: "#B58A43" },
+  { id: "cocktail", label: "Cocktail", color: "#C87854" },
+  { id: "spirits", label: "Spirits", color: "#756B88" },
+  { id: "bubbles", label: "Bubbles", color: "#6F9196" },
+  { id: "other", label: "Other", color: "#737B70" },
 ];
 
 // The three ways Home's goal card can measure progress. `field` is the
@@ -39,6 +39,8 @@ const state = {
   catchupDismissedThisSession: false,
   lastShareMessage: null,
   deleteAllArmed: false,
+  statsPeriod: "month",
+  newNameSlots: new Set(),
 };
 
 // ------------------- small helpers -------------------
@@ -137,6 +139,23 @@ function migrateData(obj) {
     if (typeof obj.settings.weeklyDrinkBudget !== "number") obj.settings.weeklyDrinkBudget = 7;
     if (typeof obj.settings.streakGoal !== "number") obj.settings.streakGoal = 30;
   }
+  if (obj && obj.days && typeof obj.days === "object") {
+    for (const entry of Object.values(obj.days)) {
+      if (!entry || !Array.isArray(entry.drinks)) continue;
+      entry.drinks = entry.drinks.map((drink) => {
+        if (!drink || typeof drink !== "object") return drink;
+        if (!Number.isInteger(drink.count) || drink.count < 1 || drink.count > 1000) return drink;
+        const previousNames = Array.isArray(drink.names) ? drink.names : [];
+        const names = Array.from({ length: drink.count }, (_, index) => {
+          const name = index === 0 && !previousNames[index] && typeof drink.name === "string"
+            ? drink.name
+            : previousNames[index];
+          return typeof name === "string" ? name.trim() : "";
+        });
+        return { type: drink.type, count: drink.count, names };
+      });
+    }
+  }
   return obj;
 }
 
@@ -150,7 +169,8 @@ function isValidDataShape(obj) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return false;
     if (!entry || typeof entry !== "object" || !Array.isArray(entry.drinks)) return false;
     for (const d of entry.drinks) {
-      if (!d || typeof d !== "object" || typeof d.type !== "string" || typeof d.count !== "number") return false;
+      if (!d || typeof d !== "object" || typeof d.type !== "string" || !Number.isInteger(d.count) || d.count < 1 || d.count > 1000) return false;
+      if (!Array.isArray(d.names) || d.names.length !== d.count || d.names.some((name) => typeof name !== "string")) return false;
     }
   }
   if (!obj.settings || typeof obj.settings !== "object") return false;
@@ -176,6 +196,20 @@ function getData() {
 
 function setData(data) {
   localStorage.setItem(LS_DATA_KEY, JSON.stringify(data));
+}
+
+function getKnownDrinkNames(data, typeId) {
+  const names = new Map();
+  for (const entry of Object.values(data.days)) {
+    const drink = entry.drinks.find((item) => item.type === typeId);
+    if (!drink) continue;
+    for (const rawName of drink.names || []) {
+      const name = rawName.trim();
+      const key = name.toLocaleLowerCase();
+      if (name && !names.has(key)) names.set(key, name);
+    }
+  }
+  return [...names.values()].sort((a, b) => a.localeCompare(b));
 }
 
 // Total drinks poured on a given day entry (undefined-safe).
@@ -359,7 +393,7 @@ function computeTrend30(data, today) {
   const points = [];
   for (let i = 29; i >= 0; i--) {
     const d = addDays(today, -i);
-    points.push(dayTotal(data.days[d]));
+    points.push({ date: d, total: dayTotal(data.days[d]) });
   }
   return points;
 }
@@ -405,6 +439,7 @@ function showScreen(id) {
   $(id).classList.add("active");
   state.screen = id;
   if (id === "screen-home") renderHome();
+  if (id === "screen-drinks") renderDrinkInsights();
   if (id === "screen-settings") renderSettings();
 }
 
@@ -670,32 +705,50 @@ function renderMoreStats(data, today) {
 }
 
 function renderTrendChart(points) {
-  const max = Math.max(0, ...points);
-  const w = 300, h = 82;
-  const topPad = 14, bottomPad = 8;
+  const values = points.map((point) => point.total);
+  const average = values.reduce((sum, value) => sum + value, 0) / (values.length || 1);
+  const max = Math.max(1, average, ...values);
+  const w = 320, h = 104;
+  const topPad = 12, bottomPad = 25;
   const plotH = h - topPad - bottomPad;
   const stepX = w / (points.length - 1 || 1);
 
   const yFor = (v) => max > 0 ? topPad + plotH - (v / max) * plotH : h - bottomPad;
-  const coords = points.map((v, i) => `${(i * stepX).toFixed(1)},${yFor(v).toFixed(1)}`);
+  const coords = values.map((v, i) => `${(i * stepX).toFixed(1)},${yFor(v).toFixed(1)}`);
 
   let markers = "";
-  if (max > 0) {
-    const peakIdx = points.indexOf(max);
-    const lastIdx = points.length - 1;
+  const peak = Math.max(...values);
+  if (peak > 0) {
+    const peakIdx = values.indexOf(peak);
+    const lastIdx = values.length - 1;
     const marked = new Set([peakIdx, lastIdx]);
     for (const idx of marked) {
-      const cx = idx * stepX, cy = yFor(points[idx]);
+      const cx = idx * stepX, cy = yFor(values[idx]);
       const labelY = cy < 18 ? cy + 13 : cy - 8;
       markers += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="2.5" fill="var(--accent)" />`;
-      markers += `<text x="${cx.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle">${points[idx]}</text>`;
+      markers += `<text x="${cx.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle">${values[idx]}</text>`;
     }
   }
 
+  const labelIndexes = [0, Math.floor((points.length - 1) / 2), points.length - 1];
+  const dateLabels = labelIndexes.map((idx, position) => {
+    const label = dateFromStr(points[idx].date).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    const anchor = position === 0 ? "start" : position === 2 ? "end" : "middle";
+    return `<text class="trend-date-label" x="${(idx * stepX).toFixed(1)}" y="${h - 3}" text-anchor="${anchor}">${label}</text>`;
+  }).join("");
+  const avgY = yFor(average).toFixed(1);
+
   $("trend-chart").innerHTML = `
-    <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <div class="trend-legend">
+      <span><i class="legend-line daily"></i>Daily</span>
+      <span><i class="legend-line average"></i>30-day avg ${average.toFixed(1)}</span>
+    </div>
+    <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" aria-label="Daily drinks and 30-day average">
+      <line x1="0" y1="${h - bottomPad}" x2="${w}" y2="${h - bottomPad}" stroke="var(--divider)" stroke-width="1" />
+      <line x1="0" y1="${avgY}" x2="${w}" y2="${avgY}" stroke="var(--clay-text)" stroke-width="1.6" stroke-dasharray="5 4" />
       <polyline points="${coords.join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
       ${markers}
+      ${dateLabels}
     </svg>`;
 }
 
@@ -707,17 +760,18 @@ function renderBarChart(months) {
     const col = document.createElement("div");
     col.className = "bar-col";
 
+    const track = document.createElement("div");
+    track.className = "bar-track";
+    const barHeight = Math.max(2, (m.total / max) * 100);
+    track.style.setProperty("--bar-height", `${barHeight}%`);
+    const fill = document.createElement("div");
+    fill.className = "bar-fill" + (m.isPartial ? " is-current" : "");
+    fill.style.height = `${barHeight}%`;
+    track.appendChild(fill);
     const value = document.createElement("div");
     value.className = "bar-value";
     value.textContent = String(m.total);
-    col.appendChild(value);
-
-    const track = document.createElement("div");
-    track.className = "bar-track";
-    const fill = document.createElement("div");
-    fill.className = "bar-fill" + (m.isPartial ? " is-current" : "");
-    fill.style.height = `${Math.max(2, (m.total / max) * 100)}%`;
-    track.appendChild(fill);
+    track.appendChild(value);
     col.appendChild(track);
 
     const label = document.createElement("div");
@@ -733,6 +787,7 @@ function renderBarChart(months) {
 
 function openDayEditor(dateStr) {
   state.editorDate = dateStr;
+  state.newNameSlots.clear();
   renderDayEditor();
   $("sheet-backdrop").classList.remove("hidden");
   $("day-editor").classList.remove("hidden");
@@ -747,6 +802,7 @@ function closeDayEditor(cancelCatchup) {
   $("sheet-backdrop").classList.add("hidden");
   $("day-editor").classList.add("hidden");
   state.editorDate = null;
+  state.newNameSlots.clear();
   renderHome();
   if (cancelCatchup) { state.catchupQueue = []; return; }
   advanceCatchupQueue();
@@ -812,8 +868,128 @@ function renderDayEditor() {
     grid.appendChild(card);
   }
 
+  renderDrinkDetails(data, entry, dateStr);
   const total = dayTotal(entry);
   $("day-editor-total").textContent = `${total} drink${total === 1 ? "" : "s"} logged`;
+}
+
+function renderDrinkDetails(data, entry, dateStr) {
+  const container = $("day-editor-details");
+  container.innerHTML = "";
+  const selected = DRINK_TYPES
+    .map((type) => ({ type, drink: entry.drinks.find((item) => item.type === type.id) }))
+    .filter(({ drink }) => drink && drink.count > 0);
+
+  container.classList.toggle("hidden", selected.length === 0);
+  if (selected.length === 0) return;
+
+  const intro = document.createElement("p");
+  intro.className = "drink-details-intro";
+  intro.textContent = "Add the specific drink or brand (optional)";
+  container.appendChild(intro);
+
+  for (const { type, drink } of selected) {
+    const group = document.createElement("div");
+    group.className = "drink-detail-group";
+
+    const heading = document.createElement("div");
+    heading.className = "drink-detail-heading";
+    heading.innerHTML = `<span>${type.label}</span><span>${drink.count} selected</span>`;
+    group.appendChild(heading);
+
+    const knownNames = getKnownDrinkNames(data, type.id);
+    for (let index = 0; index < drink.count; index++) {
+      const currentName = (drink.names && drink.names[index] || "").trim();
+      const slotKey = `${dateStr}|${type.id}|${index}`;
+      const row = document.createElement("label");
+      row.className = "drink-name-row";
+
+      if (drink.count > 1) {
+        const number = document.createElement("span");
+        number.className = "drink-name-number";
+        number.textContent = `Drink ${index + 1}`;
+        row.appendChild(number);
+      }
+
+      if (knownNames.length > 0 && !state.newNameSlots.has(slotKey)) {
+        const select = document.createElement("select");
+        select.className = "drink-name-select";
+        select.setAttribute("aria-label", `${type.label} drink ${index + 1}`);
+
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "Choose a saved drink";
+        select.appendChild(placeholder);
+        for (const name of knownNames) {
+          const option = document.createElement("option");
+          option.value = name;
+          option.textContent = name;
+          select.appendChild(option);
+        }
+        const newOption = document.createElement("option");
+        newOption.value = "__new__";
+        newOption.textContent = "+ New drink or brand";
+        select.appendChild(newOption);
+        select.value = knownNames.find((name) => name.toLocaleLowerCase() === currentName.toLocaleLowerCase()) || "";
+        select.addEventListener("change", () => {
+          if (select.value === "__new__") {
+            state.newNameSlots.add(slotKey);
+            setDrinkName(dateStr, type.id, index, "");
+            renderDayEditor();
+            const input = [...document.querySelectorAll("[data-name-slot]")]
+              .find((element) => element.dataset.nameSlot === slotKey);
+            if (input) input.focus();
+          } else {
+            setDrinkName(dateStr, type.id, index, select.value);
+          }
+        });
+        row.appendChild(select);
+      } else {
+        const inputWrap = document.createElement("div");
+        inputWrap.className = "drink-name-input-wrap";
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "drink-name-input";
+        input.placeholder = "Enter drink or brand";
+        input.value = currentName;
+        input.maxLength = 60;
+        input.dataset.nameSlot = slotKey;
+        input.setAttribute("aria-label", `${type.label} drink ${index + 1}`);
+        input.addEventListener("input", () => setDrinkName(dateStr, type.id, index, input.value));
+        inputWrap.appendChild(input);
+
+        if (knownNames.length > 0) {
+          const savedButton = document.createElement("button");
+          savedButton.type = "button";
+          savedButton.className = "use-saved-btn";
+          savedButton.textContent = "Saved";
+          savedButton.addEventListener("click", () => {
+            state.newNameSlots.delete(slotKey);
+            renderDayEditor();
+          });
+          inputWrap.appendChild(savedButton);
+        }
+        row.appendChild(inputWrap);
+      }
+      group.appendChild(row);
+    }
+    container.appendChild(group);
+  }
+}
+
+function setDrinkName(dateStr, typeId, index, value) {
+  const data = getData();
+  const entry = data.days[dateStr];
+  if (!entry) return;
+  const drinkIndex = entry.drinks.findIndex((drink) => drink.type === typeId);
+  if (drinkIndex === -1 || index >= entry.drinks[drinkIndex].count) return;
+  const drink = entry.drinks[drinkIndex];
+  const names = Array.isArray(drink.names) ? drink.names.slice(0, drink.count) : [];
+  while (names.length < drink.count) names.push("");
+  names[index] = value.slice(0, 60);
+  entry.drinks[drinkIndex] = { ...drink, names };
+  setData(data);
+  renderHome();
 }
 
 // Adds/removes one drink of `typeId` for `dateStr`, writing straight
@@ -824,11 +1000,15 @@ function adjustDrink(dateStr, typeId, delta) {
   const drinks = entry.drinks.slice();
   const idx = drinks.findIndex((d) => d.type === typeId);
   if (idx === -1) {
-    if (delta > 0) drinks.push({ type: typeId, count: 1 });
+    if (delta > 0) drinks.push({ type: typeId, count: 1, names: [""] });
   } else {
     const newCount = drinks[idx].count + delta;
     if (newCount <= 0) drinks.splice(idx, 1);
-    else drinks[idx] = { ...drinks[idx], count: newCount };
+    else {
+      const names = (drinks[idx].names || []).slice(0, newCount);
+      while (names.length < newCount) names.push("");
+      drinks[idx] = { ...drinks[idx], count: newCount, names };
+    }
   }
   data.days[dateStr] = { drinks };
   setData(data);
@@ -930,6 +1110,128 @@ $("btn-get-started").addEventListener("click", () => {
   data.onboarded = true;
   setData(data);
   showScreen("screen-home");
+});
+
+// ------------------- drink insights -------------------
+
+const STATS_PERIODS = {
+  week: { days: 7, label: "Last 7 days" },
+  month: { days: 30, label: "Last 30 days" },
+  quarter: { days: 90, label: "Last 3 months" },
+  year: { days: 365, label: "Last year" },
+};
+
+function computeDrinkInsights(data, today, days) {
+  const from = addDays(today, -(days - 1));
+  const categories = new Map(DRINK_TYPES.map((type) => [type.id, {
+    type,
+    total: 0,
+    named: 0,
+    names: new Map(),
+  }]));
+
+  for (const [dateStr, entry] of Object.entries(data.days)) {
+    if (compareDateStr(dateStr, from) < 0 || compareDateStr(dateStr, today) > 0) continue;
+    for (const drink of entry.drinks) {
+      const category = categories.get(drink.type);
+      if (!category) continue;
+      category.total += drink.count;
+      for (let index = 0; index < drink.count; index++) {
+        const name = ((drink.names && drink.names[index]) || "").trim();
+        if (!name) continue;
+        category.named++;
+        const key = name.toLocaleLowerCase();
+        const existing = category.names.get(key);
+        if (existing) existing.count++;
+        else category.names.set(key, { name, count: 1 });
+      }
+    }
+  }
+
+  const list = [...categories.values()];
+  const total = list.reduce((sum, category) => sum + category.total, 0);
+  const named = list.reduce((sum, category) => sum + category.named, 0);
+  const distinct = list.reduce((sum, category) => sum + category.names.size, 0);
+  const max = Math.max(0, ...list.map((category) => category.total));
+  const leader = max > 0 ? list.find((category) => category.total === max) : null;
+  return { from, today, list, total, named, distinct, max, leader };
+}
+
+function shortRangeDate(dateStr) {
+  return dateFromStr(dateStr).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function renderDrinkInsights() {
+  const period = STATS_PERIODS[state.statsPeriod];
+  const stats = computeDrinkInsights(getData(), todayStr(), period.days);
+  document.querySelectorAll(".period-option").forEach((button) => {
+    const active = button.dataset.period === state.statsPeriod;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+
+  $("drinks-period-label").textContent = `${period.label} · ${shortRangeDate(stats.from)}–${shortRangeDate(stats.today)}`;
+  $("drinks-total").textContent = String(stats.total);
+  $("drinks-named-total").textContent = String(stats.named);
+  $("drinks-distinct-total").textContent = String(stats.distinct);
+  $("drinks-named-percent").textContent = stats.total ? `${Math.round((stats.named / stats.total) * 100)}%` : "0%";
+  $("drinks-leader").textContent = stats.leader
+    ? `${stats.leader.type.label} leads · ${stats.leader.total}`
+    : "No drinks logged";
+
+  const container = $("drink-category-stats");
+  container.innerHTML = "";
+  for (const category of stats.list) {
+    const isLeader = category === stats.leader;
+    const fillPercent = category.total > 0 ? Math.max(8, (category.total / stats.max) * 100) : 0;
+    const names = [...category.names.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+    const unnamed = category.total - category.named;
+
+    const card = document.createElement("article");
+    card.className = "drink-category-card" + (isLeader ? " is-leader" : "");
+    card.style.setProperty("--category-color", category.type.color);
+
+    const nameRows = names.map((item) => `
+      <div class="brand-stat-row">
+        <span>${escapeHtml(item.name)}</span>
+        <strong>${item.count}</strong>
+      </div>`).join("");
+    const unnamedRow = unnamed > 0 ? `
+      <div class="brand-stat-row is-unnamed">
+        <span>Not specified</span>
+        <strong>${unnamed}</strong>
+      </div>` : "";
+    const emptyRow = category.total === 0 ? `<p class="category-empty">Nothing logged in this period.</p>` : "";
+
+    card.innerHTML = `
+      <div class="category-card-content">
+        <div class="category-card-heading">
+          <div>
+            <div class="category-title-line">
+              <h3>${category.type.label}</h3>
+              ${isLeader ? '<span class="leader-chip">Leader</span>' : ""}
+            </div>
+            <p><strong>${category.total}</strong> drink${s(category.total)} · <strong>${category.names.size}</strong> named option${s(category.names.size)}</p>
+          </div>
+        </div>
+        <div class="category-name-list">${nameRows}${unnamedRow}${emptyRow}</div>
+      </div>
+      <div class="thermometer-wrap" aria-label="${category.type.label}: ${category.total} drinks">
+        <span class="thermometer-value">${category.total}</span>
+        <div class="thermometer-tube"><span style="height:${fillPercent.toFixed(1)}%"></span></div>
+        <div class="thermometer-bulb"></div>
+      </div>`;
+    container.appendChild(card);
+  }
+}
+
+$("btn-open-drinks").addEventListener("click", () => showScreen("screen-drinks"));
+$("btn-drinks-back").addEventListener("click", () => showScreen("screen-home"));
+document.querySelectorAll(".period-option").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.statsPeriod = button.dataset.period;
+    renderDrinkInsights();
+  });
 });
 
 // ------------------- settings -------------------
@@ -1042,7 +1344,9 @@ function formatDayLine(dateStr, entry) {
   const parts = DRINK_TYPES
     .map((type) => {
       const d = entry.drinks.find((x) => x.type === type.id);
-      return d ? `${type.label} x${d.count}` : null;
+      if (!d) return null;
+      const names = [...new Set((d.names || []).map((name) => name.trim()).filter(Boolean))];
+      return `${type.label} x${d.count}${names.length ? ` (${names.join(", ")})` : ""}`;
     })
     .filter(Boolean);
   const total = dayTotal(entry);

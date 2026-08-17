@@ -1040,6 +1040,7 @@ function renderDrinkDetails(data, entry, dateStr) {
         placeholderLabel: "Choose a saved brand",
         newLabel: "+ New brand",
         inputPlaceholder: "Enter brand",
+        naOption: true,
         // Changing the brand reshapes the drink field's option list below
         // it, so this one re-renders the whole editor rather than just
         // writing through — the drink select needs an actual remount.
@@ -1069,7 +1070,7 @@ function renderDrinkDetails(data, entry, dateStr) {
 // a "+ New" option, or a free-text input once that's picked (with a
 // "Saved" button to switch back). Brand and drink fields both follow this
 // same pattern — only the value list and labels differ.
-function buildDrinkFieldRow({ slotKey, fieldLabel, ariaLabel, knownValues, currentValue, placeholderLabel, newLabel, inputPlaceholder, onCommit }) {
+function buildDrinkFieldRow({ slotKey, fieldLabel, ariaLabel, knownValues, currentValue, placeholderLabel, newLabel, inputPlaceholder, naOption, onCommit }) {
   const field = document.createElement("label");
   field.className = "drink-field";
 
@@ -1078,15 +1079,25 @@ function buildDrinkFieldRow({ slotKey, fieldLabel, ariaLabel, knownValues, curre
   caption.textContent = fieldLabel;
   field.appendChild(caption);
 
-  if (knownValues.length > 0 && !state.newNameSlots.has(slotKey)) {
+  if ((knownValues.length > 0 || naOption) && !state.newNameSlots.has(slotKey)) {
     const select = document.createElement("select");
     select.className = "drink-name-select";
     select.setAttribute("aria-label", ariaLabel);
 
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.textContent = placeholderLabel;
-    select.appendChild(placeholder);
+    if (naOption) {
+      // A blank brand is a real, common case (many drinks have no
+      // brand), so it gets its own explicit option instead of hiding
+      // behind an unselected placeholder.
+      const na = document.createElement("option");
+      na.value = "__na__";
+      na.textContent = "Not applicable";
+      select.appendChild(na);
+    } else {
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = placeholderLabel;
+      select.appendChild(placeholder);
+    }
     for (const value of knownValues) {
       const option = document.createElement("option");
       option.value = value;
@@ -1097,7 +1108,8 @@ function buildDrinkFieldRow({ slotKey, fieldLabel, ariaLabel, knownValues, curre
     newOption.value = "__new__";
     newOption.textContent = newLabel;
     select.appendChild(newOption);
-    select.value = knownValues.find((value) => value.toLocaleLowerCase() === currentValue.toLocaleLowerCase()) || "";
+    const matched = knownValues.find((value) => value.toLocaleLowerCase() === currentValue.toLocaleLowerCase());
+    select.value = matched || (naOption && !currentValue ? "__na__" : "");
     select.addEventListener("change", () => {
       if (select.value === "__new__") {
         state.newNameSlots.add(slotKey);
@@ -1106,6 +1118,8 @@ function buildDrinkFieldRow({ slotKey, fieldLabel, ariaLabel, knownValues, curre
         const input = [...document.querySelectorAll("[data-name-slot]")]
           .find((element) => element.dataset.nameSlot === slotKey);
         if (input) input.focus();
+      } else if (select.value === "__na__") {
+        onCommit("");
       } else {
         onCommit(select.value);
       }
@@ -1125,7 +1139,7 @@ function buildDrinkFieldRow({ slotKey, fieldLabel, ariaLabel, knownValues, curre
     input.addEventListener("input", () => onCommit(input.value));
     inputWrap.appendChild(input);
 
-    if (knownValues.length > 0) {
+    if (knownValues.length > 0 || naOption) {
       const savedButton = document.createElement("button");
       savedButton.type = "button";
       savedButton.className = "use-saved-btn";

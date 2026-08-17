@@ -13,12 +13,14 @@ const LS_DATA_KEY = "ol-data";
 const APP_SHARE_URL = "https://heee.github.io/one-less/";
 
 const DRINK_TYPES = [
-  { id: "wine", label: "Wine", color: "#8E5A62" },
-  { id: "beer", label: "Beer", color: "#B58A43" },
-  { id: "cocktail", label: "Cocktail", color: "#C87854" },
-  { id: "spirits", label: "Spirits", color: "#756B88" },
-  { id: "bubbles", label: "Bubbles", color: "#6F9196" },
-  { id: "other", label: "Other", color: "#737B70" },
+  { id: "wine", label: "Wine", hint: "Red, white, rosé, orange", color: "#8E5A62" },
+  { id: "beer", label: "Beer", hint: "Lager, IPA, stout, etc.", color: "#B58A43" },
+  { id: "cocktail", label: "Cocktail", hint: "Mixed drinks, regardless of base spirit", color: "#C87854" },
+  { id: "spirits", label: "Spirits", hint: "Neat, rocks, shot, highball", color: "#756B88" },
+  { id: "sparkling", label: "Sparkling", hint: "Champagne, Prosecco, Cava, sparkling wine", color: "#6F9196" },
+  { id: "cider", label: "Cider", hint: "", color: "#A66B2E" },
+  { id: "seltzer", label: "Seltzer / RTD", hint: "Hard seltzers, canned cocktails, hard lemonade, alcopops", color: "#4F8578" },
+  { id: "other", label: "Other", hint: "Sake, soju, mead, fortified wine, unusual drinks", color: "#737B70" },
 ];
 
 // The three ways Home's goal card can measure progress. `field` is the
@@ -37,6 +39,8 @@ const state = {
   editorDate: null,
   catchupQueue: [],
   catchupDismissedThisSession: false,
+  reviewNamesDismissedThisSession: false,
+  reviewItems: [],
   lastShareMessage: null,
   deleteAllArmed: false,
   statsPeriod: "month",
@@ -118,9 +122,22 @@ function compareDateStr(a, b) { return a < b ? -1 : a > b ? 1 : 0; }
 function defaultData() {
   const today = todayStr();
   return {
-    v: 1, startedOn: today, onboarded: false, days: {},
+    v: 2, startedOn: today, onboarded: false, days: {},
     settings: { goalType: "dryDays", weeklyGoal: 5, weeklyDrinkBudget: 7, streakGoal: 30, shareIncludeUrl: true },
   };
+}
+
+// Splits a legacy free-text drink name into a best-guess {brand, drink}
+// pair: first word becomes the brand, the rest becomes the drink. A
+// single-word name can't be split, so it's kept as the drink with no
+// brand guessed. This is only ever a starting guess — surfaced to the
+// user via the pending-review banner so they can correct it centrally.
+function splitLegacyDrinkName(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed) return { brand: "", drink: "" };
+  const spaceIndex = trimmed.indexOf(" ");
+  if (spaceIndex === -1) return { brand: "", drink: trimmed };
+  return { brand: trimmed.slice(0, spaceIndex).trim(), drink: trimmed.slice(spaceIndex + 1).trim() };
 }
 
 // Old builds tracked a weekly drink *budget*; the redesign tracked a weekly
@@ -145,23 +162,85 @@ function migrateData(obj) {
       entry.drinks = entry.drinks.map((drink) => {
         if (!drink || typeof drink !== "object") return drink;
         if (!Number.isInteger(drink.count) || drink.count < 1 || drink.count > 1000) return drink;
+        // "Bubbles" was renamed to "Sparkling" — same category, new label.
+        const type = drink.type === "bubbles" ? "sparkling" : drink.type;
+
+        if (Array.isArray(drink.entries)) {
+          // Already on the brand/drink schema — just make sure the array
+          // length tracks count (e.g. after a count bump elsewhere).
+          const entries = Array.from({ length: drink.count }, (_, index) => {
+            const e = drink.entries[index];
+            if (!e || typeof e !== "object") return { brand: "", drink: "" };
+            const out = { brand: typeof e.brand === "string" ? e.brand : "", drink: typeof e.drink === "string" ? e.drink : "" };
+            if (typeof e._raw === "string") out._raw = e._raw;
+            return out;
+          });
+          return { type, count: drink.count, entries };
+        }
+
+        // Legacy single-name schema: split each name into a best-guess
+        // {brand, drink} pair, tagged with `_raw` so the pending-review
+        // banner can find it and let the user correct the guess.
         const previousNames = Array.isArray(drink.names) ? drink.names : [];
-        const names = Array.from({ length: drink.count }, (_, index) => {
-          const name = index === 0 && !previousNames[index] && typeof drink.name === "string"
+        const entries = Array.from({ length: drink.count }, (_, index) => {
+          const rawName = index === 0 && !previousNames[index] && typeof drink.name === "string"
             ? drink.name
             : previousNames[index];
-          return typeof name === "string" ? name.trim() : "";
+          const raw = (typeof rawName === "string" ? rawName : "").trim();
+          if (!raw) return { brand: "", drink: "" };
+          const guess = splitLegacyDrinkName(raw);
+          return { ...guess, _raw: raw };
         });
-        return { type: drink.type, count: drink.count, names };
+        return { type, count: drink.count, entries };
       });
     }
   }
+  if (obj) obj.v = 2;
   return obj;
+}
+
+// Every {brand, drink} entry still carrying `_raw` came from an
+// auto-split legacy name and hasn't been confirmed by the user yet.
+// Deduped by type + original raw string so the review sheet shows one
+// row per distinct legacy name, however many times it was logged.
+function getPendingReviewItems(data) {
+  const items = new Map();
+  for (const entry of Object.values(data.days)) {
+    for (const drink of entry.drinks) {
+      for (const e of drink.entries || []) {
+        if (!e._raw) continue;
+        const key = `${drink.type}|${e._raw.toLocaleLowerCase()}`;
+        if (!items.has(key)) items.set(key, { typeId: drink.type, raw: e._raw, brand: e.brand, drink: e.drink });
+      }
+    }
+  }
+  return [...items.values()];
+}
+
+// Applies user-corrected {brand, drink} values from the review sheet to
+// every entry sharing the same type + original raw name, then clears the
+// `_raw` tag so those entries drop out of the pending-review list.
+function applyNameReview(corrections) {
+  const data = getData();
+  const byKey = new Map(corrections.map((c) => [`${c.typeId}|${c.raw.toLocaleLowerCase()}`, c]));
+  for (const entry of Object.values(data.days)) {
+    for (const drink of entry.drinks) {
+      if (!Array.isArray(drink.entries)) continue;
+      drink.entries = drink.entries.map((e) => {
+        if (!e._raw) return e;
+        const key = `${drink.type}|${e._raw.toLocaleLowerCase()}`;
+        const c = byKey.get(key);
+        if (!c) return { brand: e.brand, drink: e.drink };
+        return { brand: c.brand.trim().slice(0, 60), drink: c.drink.trim().slice(0, 60) };
+      });
+    }
+  }
+  setData(data);
 }
 
 function isValidDataShape(obj) {
   if (!obj || typeof obj !== "object") return false;
-  if (obj.v !== 1) return false;
+  if (obj.v !== 2) return false;
   if (typeof obj.startedOn !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(obj.startedOn)) return false;
   if (typeof obj.onboarded !== "boolean") return false;
   if (!obj.days || typeof obj.days !== "object") return false;
@@ -170,7 +249,11 @@ function isValidDataShape(obj) {
     if (!entry || typeof entry !== "object" || !Array.isArray(entry.drinks)) return false;
     for (const d of entry.drinks) {
       if (!d || typeof d !== "object" || typeof d.type !== "string" || !Number.isInteger(d.count) || d.count < 1 || d.count > 1000) return false;
-      if (!Array.isArray(d.names) || d.names.length !== d.count || d.names.some((name) => typeof name !== "string")) return false;
+      if (!Array.isArray(d.entries) || d.entries.length !== d.count) return false;
+      for (const e of d.entries) {
+        if (!e || typeof e !== "object" || typeof e.brand !== "string" || typeof e.drink !== "string") return false;
+        if (e._raw !== undefined && typeof e._raw !== "string") return false;
+      }
     }
   }
   if (!obj.settings || typeof obj.settings !== "object") return false;
@@ -198,18 +281,38 @@ function setData(data) {
   localStorage.setItem(LS_DATA_KEY, JSON.stringify(data));
 }
 
-function getKnownDrinkNames(data, typeId) {
-  const names = new Map();
+function getKnownBrands(data, typeId) {
+  const brands = new Map();
   for (const entry of Object.values(data.days)) {
     const drink = entry.drinks.find((item) => item.type === typeId);
     if (!drink) continue;
-    for (const rawName of drink.names || []) {
-      const name = rawName.trim();
-      const key = name.toLocaleLowerCase();
-      if (name && !names.has(key)) names.set(key, name);
+    for (const e of drink.entries || []) {
+      const brand = (e.brand || "").trim();
+      const key = brand.toLocaleLowerCase();
+      if (brand && !brands.has(key)) brands.set(key, brand);
     }
   }
-  return [...names.values()].sort((a, b) => a.localeCompare(b));
+  return [...brands.values()].sort((a, b) => a.localeCompare(b));
+}
+
+// Drink options for a type, filtered to a specific brand once one's been
+// picked — the drink list is meant to follow the brand. With no brand
+// selected yet, every known drink for the type is offered.
+function getKnownDrinkOptions(data, typeId, brand) {
+  const drinks = new Map();
+  const brandKey = (brand || "").trim().toLocaleLowerCase();
+  for (const entry of Object.values(data.days)) {
+    const drink = entry.drinks.find((item) => item.type === typeId);
+    if (!drink) continue;
+    for (const e of drink.entries || []) {
+      const name = (e.drink || "").trim();
+      if (!name) continue;
+      if (brandKey && (e.brand || "").trim().toLocaleLowerCase() !== brandKey) continue;
+      const key = name.toLocaleLowerCase();
+      if (!drinks.has(key)) drinks.set(key, name);
+    }
+  }
+  return [...drinks.values()].sort((a, b) => a.localeCompare(b));
 }
 
 // Total drinks poured on a given day entry (undefined-safe).
@@ -458,6 +561,7 @@ function renderHome() {
     `<b>${streak}-day streak</b> (best ${longest}) · <b>${monthTotal}</b> drink${monthTotal === 1 ? "" : "s"} logged this month`;
 
   renderCatchupBanner(data, today);
+  renderReviewNamesBanner(data);
   renderCalendar(data);
   renderMoreStats(data, today);
 }
@@ -564,6 +668,15 @@ function renderCatchupBanner(data, today) {
   if (days.length === 0) { banner.classList.add("hidden"); return; }
   banner.classList.remove("hidden");
   $("catchup-text").textContent = `${days.length} day${days.length === 1 ? "" : "s"} need${days.length === 1 ? "s" : ""} logging`;
+}
+
+function renderReviewNamesBanner(data) {
+  const banner = $("review-names-banner");
+  if (state.reviewNamesDismissedThisSession) { banner.classList.add("hidden"); return; }
+  const items = getPendingReviewItems(data);
+  if (items.length === 0) { banner.classList.add("hidden"); return; }
+  banner.classList.remove("hidden");
+  $("review-names-text").textContent = `${items.length} drink name${items.length === 1 ? "" : "s"} to review`;
 }
 
 // ------------------- calendar -------------------
@@ -840,6 +953,7 @@ function renderDayEditor() {
 
     const card = document.createElement("div");
     card.className = "type-card" + (count > 0 ? " is-active" : "");
+    if (type.hint) card.title = `${type.label} — ${type.hint}`;
 
     const label = document.createElement("span");
     label.className = "type-card-label";
@@ -897,11 +1011,14 @@ function renderDrinkDetails(data, entry, dateStr) {
     heading.innerHTML = `<span>${type.label}</span><span>${drink.count} selected</span>`;
     group.appendChild(heading);
 
-    const knownNames = getKnownDrinkNames(data, type.id);
+    const knownBrands = getKnownBrands(data, type.id);
     for (let index = 0; index < drink.count; index++) {
-      const currentName = (drink.names && drink.names[index] || "").trim();
-      const slotKey = `${dateStr}|${type.id}|${index}`;
-      const row = document.createElement("label");
+      const current = (drink.entries && drink.entries[index]) || { brand: "", drink: "" };
+      const knownDrinkOptions = getKnownDrinkOptions(data, type.id, current.brand);
+      const brandSlotKey = `${dateStr}|${type.id}|${index}|brand`;
+      const drinkSlotKey = `${dateStr}|${type.id}|${index}|drink`;
+
+      const row = document.createElement("div");
       row.className = "drink-name-row";
 
       if (drink.count > 1) {
@@ -911,83 +1028,131 @@ function renderDrinkDetails(data, entry, dateStr) {
         row.appendChild(number);
       }
 
-      if (knownNames.length > 0 && !state.newNameSlots.has(slotKey)) {
-        const select = document.createElement("select");
-        select.className = "drink-name-select";
-        select.setAttribute("aria-label", `${type.label} drink ${index + 1}`);
+      const fieldPair = document.createElement("div");
+      fieldPair.className = "drink-field-pair";
 
-        const placeholder = document.createElement("option");
-        placeholder.value = "";
-        placeholder.textContent = "Choose a saved drink";
-        select.appendChild(placeholder);
-        for (const name of knownNames) {
-          const option = document.createElement("option");
-          option.value = name;
-          option.textContent = name;
-          select.appendChild(option);
-        }
-        const newOption = document.createElement("option");
-        newOption.value = "__new__";
-        newOption.textContent = "+ New drink or brand";
-        select.appendChild(newOption);
-        select.value = knownNames.find((name) => name.toLocaleLowerCase() === currentName.toLocaleLowerCase()) || "";
-        select.addEventListener("change", () => {
-          if (select.value === "__new__") {
-            state.newNameSlots.add(slotKey);
-            setDrinkName(dateStr, type.id, index, "");
-            renderDayEditor();
-            const input = [...document.querySelectorAll("[data-name-slot]")]
-              .find((element) => element.dataset.nameSlot === slotKey);
-            if (input) input.focus();
-          } else {
-            setDrinkName(dateStr, type.id, index, select.value);
-          }
-        });
-        row.appendChild(select);
-      } else {
-        const inputWrap = document.createElement("div");
-        inputWrap.className = "drink-name-input-wrap";
-        const input = document.createElement("input");
-        input.type = "text";
-        input.className = "drink-name-input";
-        input.placeholder = "Enter drink or brand";
-        input.value = currentName;
-        input.maxLength = 60;
-        input.dataset.nameSlot = slotKey;
-        input.setAttribute("aria-label", `${type.label} drink ${index + 1}`);
-        input.addEventListener("input", () => setDrinkName(dateStr, type.id, index, input.value));
-        inputWrap.appendChild(input);
+      fieldPair.appendChild(buildDrinkFieldRow({
+        slotKey: brandSlotKey,
+        fieldLabel: "Brand",
+        ariaLabel: `${type.label} drink ${index + 1} brand`,
+        knownValues: knownBrands,
+        currentValue: current.brand,
+        placeholderLabel: "Choose a saved brand",
+        newLabel: "+ New brand",
+        inputPlaceholder: "Enter brand",
+        // Changing the brand reshapes the drink field's option list below
+        // it, so this one re-renders the whole editor rather than just
+        // writing through — the drink select needs an actual remount.
+        onCommit: (value) => { setDrinkEntryField(dateStr, type.id, index, "brand", value); renderDayEditor(); },
+      }));
 
-        if (knownNames.length > 0) {
-          const savedButton = document.createElement("button");
-          savedButton.type = "button";
-          savedButton.className = "use-saved-btn";
-          savedButton.textContent = "Saved";
-          savedButton.addEventListener("click", () => {
-            state.newNameSlots.delete(slotKey);
-            renderDayEditor();
-          });
-          inputWrap.appendChild(savedButton);
-        }
-        row.appendChild(inputWrap);
-      }
+      fieldPair.appendChild(buildDrinkFieldRow({
+        slotKey: drinkSlotKey,
+        fieldLabel: "Drink",
+        ariaLabel: `${type.label} drink ${index + 1}`,
+        knownValues: knownDrinkOptions,
+        currentValue: current.drink,
+        placeholderLabel: "Choose a saved drink",
+        newLabel: "+ New drink",
+        inputPlaceholder: "Enter drink",
+        onCommit: (value) => setDrinkEntryField(dateStr, type.id, index, "drink", value),
+      }));
+
+      row.appendChild(fieldPair);
       group.appendChild(row);
     }
     container.appendChild(group);
   }
 }
 
-function setDrinkName(dateStr, typeId, index, value) {
+// Builds one labeled brand-or-drink field: a dropdown of known values plus
+// a "+ New" option, or a free-text input once that's picked (with a
+// "Saved" button to switch back). Brand and drink fields both follow this
+// same pattern — only the value list and labels differ.
+function buildDrinkFieldRow({ slotKey, fieldLabel, ariaLabel, knownValues, currentValue, placeholderLabel, newLabel, inputPlaceholder, onCommit }) {
+  const field = document.createElement("label");
+  field.className = "drink-field";
+
+  const caption = document.createElement("span");
+  caption.className = "drink-field-label";
+  caption.textContent = fieldLabel;
+  field.appendChild(caption);
+
+  if (knownValues.length > 0 && !state.newNameSlots.has(slotKey)) {
+    const select = document.createElement("select");
+    select.className = "drink-name-select";
+    select.setAttribute("aria-label", ariaLabel);
+
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = placeholderLabel;
+    select.appendChild(placeholder);
+    for (const value of knownValues) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = value;
+      select.appendChild(option);
+    }
+    const newOption = document.createElement("option");
+    newOption.value = "__new__";
+    newOption.textContent = newLabel;
+    select.appendChild(newOption);
+    select.value = knownValues.find((value) => value.toLocaleLowerCase() === currentValue.toLocaleLowerCase()) || "";
+    select.addEventListener("change", () => {
+      if (select.value === "__new__") {
+        state.newNameSlots.add(slotKey);
+        onCommit("");
+        renderDayEditor();
+        const input = [...document.querySelectorAll("[data-name-slot]")]
+          .find((element) => element.dataset.nameSlot === slotKey);
+        if (input) input.focus();
+      } else {
+        onCommit(select.value);
+      }
+    });
+    field.appendChild(select);
+  } else {
+    const inputWrap = document.createElement("div");
+    inputWrap.className = "drink-name-input-wrap";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "drink-name-input";
+    input.placeholder = inputPlaceholder;
+    input.value = currentValue;
+    input.maxLength = 60;
+    input.dataset.nameSlot = slotKey;
+    input.setAttribute("aria-label", ariaLabel);
+    input.addEventListener("input", () => onCommit(input.value));
+    inputWrap.appendChild(input);
+
+    if (knownValues.length > 0) {
+      const savedButton = document.createElement("button");
+      savedButton.type = "button";
+      savedButton.className = "use-saved-btn";
+      savedButton.textContent = "Saved";
+      savedButton.addEventListener("click", () => {
+        state.newNameSlots.delete(slotKey);
+        renderDayEditor();
+      });
+      inputWrap.appendChild(savedButton);
+    }
+    field.appendChild(inputWrap);
+  }
+  return field;
+}
+
+function setDrinkEntryField(dateStr, typeId, index, field, value) {
   const data = getData();
   const entry = data.days[dateStr];
   if (!entry) return;
   const drinkIndex = entry.drinks.findIndex((drink) => drink.type === typeId);
   if (drinkIndex === -1 || index >= entry.drinks[drinkIndex].count) return;
   const drink = entry.drinks[drinkIndex];
-  const names = Array.isArray(drink.names) ? drink.names.slice(0, drink.count) : [];
-  while (names.length < drink.count) names.push("");
-  names[index] = value.slice(0, 60);
-  entry.drinks[drinkIndex] = { ...drink, names };
+  const entries = Array.isArray(drink.entries) ? drink.entries.slice(0, drink.count) : [];
+  while (entries.length < drink.count) entries.push({ brand: "", drink: "" });
+  const current = entries[index] || { brand: "", drink: "" };
+  entries[index] = { brand: field === "brand" ? value.slice(0, 60) : current.brand, drink: field === "drink" ? value.slice(0, 60) : current.drink };
+  entry.drinks[drinkIndex] = { ...drink, entries };
   setData(data);
   renderHome();
 }
@@ -1000,14 +1165,14 @@ function adjustDrink(dateStr, typeId, delta) {
   const drinks = entry.drinks.slice();
   const idx = drinks.findIndex((d) => d.type === typeId);
   if (idx === -1) {
-    if (delta > 0) drinks.push({ type: typeId, count: 1, names: [""] });
+    if (delta > 0) drinks.push({ type: typeId, count: 1, entries: [{ brand: "", drink: "" }] });
   } else {
     const newCount = drinks[idx].count + delta;
     if (newCount <= 0) drinks.splice(idx, 1);
     else {
-      const names = (drinks[idx].names || []).slice(0, newCount);
-      while (names.length < newCount) names.push("");
-      drinks[idx] = { ...drinks[idx], count: newCount, names };
+      const entries = (drinks[idx].entries || []).slice(0, newCount);
+      while (entries.length < newCount) entries.push({ brand: "", drink: "" });
+      drinks[idx] = { ...drinks[idx], count: newCount, entries };
     }
   }
   data.days[dateStr] = { drinks };
@@ -1037,7 +1202,10 @@ $("btn-day-done").addEventListener("click", () => closeDayEditor());
 
 $("btn-day-editor-close").addEventListener("click", () => closeDayEditor(true));
 
-$("sheet-backdrop").addEventListener("click", () => closeDayEditor(true));
+$("sheet-backdrop").addEventListener("click", () => {
+  if (!$("name-review-editor").classList.contains("hidden")) { closeNameReviewSheet(); return; }
+  closeDayEditor(true);
+});
 
 (function setupSheetSwipeDown() {
   const sheet = $("day-editor");
@@ -1073,6 +1241,58 @@ $("btn-catchup-log").addEventListener("click", () => {
 $("btn-catchup-dismiss").addEventListener("click", () => {
   state.catchupDismissedThisSession = true;
   $("catchup-banner").classList.add("hidden");
+});
+
+$("btn-review-names").addEventListener("click", () => openNameReviewSheet());
+
+$("btn-review-names-dismiss").addEventListener("click", () => {
+  state.reviewNamesDismissedThisSession = true;
+  $("review-names-banner").classList.add("hidden");
+});
+
+function openNameReviewSheet() {
+  const items = getPendingReviewItems(getData());
+  state.reviewItems = items;
+  const list = $("name-review-list");
+  list.innerHTML = "";
+  items.forEach((item, index) => {
+    const typeLabel = (DRINK_TYPES.find((t) => t.id === item.typeId) || {}).label || item.typeId;
+    const row = document.createElement("div");
+    row.className = "name-review-row";
+    row.innerHTML = `
+      <div class="name-review-heading"><span>${escapeHtml(typeLabel)}</span><span class="name-review-raw">"${escapeHtml(item.raw)}"</span></div>
+      <label class="drink-field">
+        <span class="drink-field-label">Brand</span>
+        <input type="text" class="drink-name-input" data-review-field="brand" data-review-index="${index}" value="${escapeHtml(item.brand)}" maxlength="60">
+      </label>
+      <label class="drink-field">
+        <span class="drink-field-label">Drink</span>
+        <input type="text" class="drink-name-input" data-review-field="drink" data-review-index="${index}" value="${escapeHtml(item.drink)}" maxlength="60">
+      </label>`;
+    list.appendChild(row);
+  });
+  $("sheet-backdrop").classList.remove("hidden");
+  $("name-review-editor").classList.remove("hidden");
+}
+
+function closeNameReviewSheet() {
+  $("sheet-backdrop").classList.add("hidden");
+  $("name-review-editor").classList.add("hidden");
+}
+
+$("btn-name-review-close").addEventListener("click", closeNameReviewSheet);
+
+$("btn-name-review-save").addEventListener("click", () => {
+  const corrections = (state.reviewItems || []).map((item, index) => {
+    const brandInput = document.querySelector(`[data-review-field="brand"][data-review-index="${index}"]`);
+    const drinkInput = document.querySelector(`[data-review-field="drink"][data-review-index="${index}"]`);
+    return { typeId: item.typeId, raw: item.raw, brand: brandInput ? brandInput.value : item.brand, drink: drinkInput ? drinkInput.value : item.drink };
+  });
+  applyNameReview(corrections);
+  state.reviewItems = [];
+  closeNameReviewSheet();
+  renderHome();
+  toast("Drink names updated");
 });
 
 // ------------------- welcome / onboarding -------------------
@@ -1127,7 +1347,8 @@ function computeDrinkInsights(data, today, days) {
     type,
     total: 0,
     named: 0,
-    names: new Map(),
+    brands: new Map(),
+    drinkNames: new Map(),
   }]));
 
   for (const [dateStr, entry] of Object.entries(data.days)) {
@@ -1136,14 +1357,22 @@ function computeDrinkInsights(data, today, days) {
       const category = categories.get(drink.type);
       if (!category) continue;
       category.total += drink.count;
-      for (let index = 0; index < drink.count; index++) {
-        const name = ((drink.names && drink.names[index]) || "").trim();
-        if (!name) continue;
-        category.named++;
-        const key = name.toLocaleLowerCase();
-        const existing = category.names.get(key);
-        if (existing) existing.count++;
-        else category.names.set(key, { name, count: 1 });
+      for (const e of drink.entries || []) {
+        const brand = (e.brand || "").trim();
+        const drinkName = (e.drink || "").trim();
+        if (drinkName) category.named++;
+        if (brand) {
+          const key = brand.toLocaleLowerCase();
+          const existing = category.brands.get(key);
+          if (existing) existing.count++;
+          else category.brands.set(key, { name: brand, count: 1 });
+        }
+        if (drinkName) {
+          const key = drinkName.toLocaleLowerCase();
+          const existing = category.drinkNames.get(key);
+          if (existing) existing.count++;
+          else category.drinkNames.set(key, { name: drinkName, count: 1 });
+        }
       }
     }
   }
@@ -1151,7 +1380,7 @@ function computeDrinkInsights(data, today, days) {
   const list = [...categories.values()];
   const total = list.reduce((sum, category) => sum + category.total, 0);
   const named = list.reduce((sum, category) => sum + category.named, 0);
-  const distinct = list.reduce((sum, category) => sum + category.names.size, 0);
+  const distinct = list.reduce((sum, category) => sum + category.drinkNames.size, 0);
   const max = Math.max(0, ...list.map((category) => category.total));
   const leader = max > 0 ? list.find((category) => category.total === max) : null;
   return { from, today, list, total, named, distinct, max, leader };
@@ -1181,26 +1410,34 @@ function renderDrinkInsights() {
 
   const container = $("drink-category-stats");
   container.innerHTML = "";
-  for (const category of stats.list) {
+  const sortedList = [...stats.list].sort((a, b) => b.total - a.total);
+  for (const category of sortedList) {
     const isLeader = category === stats.leader;
     const fillPercent = category.total > 0 ? Math.max(8, (category.total / stats.max) * 100) : 0;
-    const names = [...category.names.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+    const brands = [...category.brands.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+    const drinkNames = [...category.drinkNames.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
     const unnamed = category.total - category.named;
 
     const card = document.createElement("article");
     card.className = "drink-category-card" + (isLeader ? " is-leader" : "");
     card.style.setProperty("--category-color", category.type.color);
 
-    const nameRows = names.map((item) => `
+    const statRows = (items) => items.map((item) => `
       <div class="brand-stat-row">
         <span>${escapeHtml(item.name)}</span>
         <strong>${item.count}</strong>
       </div>`).join("");
+    const brandRows = brands.length > 0 ? `
+      <p class="name-list-subhead">By brand</p>
+      ${statRows(brands)}` : "";
     const unnamedRow = unnamed > 0 ? `
       <div class="brand-stat-row is-unnamed">
         <span>Not specified</span>
         <strong>${unnamed}</strong>
       </div>` : "";
+    const drinkRows = (drinkNames.length > 0 || unnamedRow) ? `
+      <p class="name-list-subhead">By drink</p>
+      ${statRows(drinkNames)}${unnamedRow}` : "";
     const emptyRow = category.total === 0 ? `<p class="category-empty">Nothing logged in this period.</p>` : "";
 
     card.innerHTML = `
@@ -1211,10 +1448,10 @@ function renderDrinkInsights() {
               <h3>${category.type.label}</h3>
               ${isLeader ? '<span class="leader-chip">Leader</span>' : ""}
             </div>
-            <p><strong>${category.total}</strong> drink${s(category.total)} · <strong>${category.names.size}</strong> named option${s(category.names.size)}</p>
+            <p><strong>${category.total}</strong> drink${s(category.total)} · <strong>${category.drinkNames.size}</strong> named option${s(category.drinkNames.size)}</p>
           </div>
         </div>
-        <div class="category-name-list">${nameRows}${unnamedRow}${emptyRow}</div>
+        <div class="category-name-list">${brandRows}${drinkRows}${emptyRow}</div>
       </div>
       <div class="thermometer-wrap" aria-label="${category.type.label}: ${category.total} drinks">
         <span class="thermometer-value">${category.total}</span>
@@ -1345,7 +1582,7 @@ function formatDayLine(dateStr, entry) {
     .map((type) => {
       const d = entry.drinks.find((x) => x.type === type.id);
       if (!d) return null;
-      const names = [...new Set((d.names || []).map((name) => name.trim()).filter(Boolean))];
+      const names = [...new Set((d.entries || []).map((e) => [e.brand, e.drink].map((part) => part.trim()).filter(Boolean).join(" ")).filter(Boolean))];
       return `${type.label} x${d.count}${names.length ? ` (${names.join(", ")})` : ""}`;
     })
     .filter(Boolean);

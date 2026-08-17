@@ -122,6 +122,14 @@
       </div>
     </div>
 
+    <div id="review-names-banner" class="catchup-banner hidden">
+      <span id="review-names-text">drink names to review</span>
+      <div class="catchup-actions">
+        <button id="btn-review-names" type="button" class="btn btn-secondary btn-sm">Review</button>
+        <button id="btn-review-names-dismiss" type="button" class="icon-btn catchup-dismiss" aria-label="Dismiss">×</button>
+      </div>
+    </div>
+
     <div class="calendar-card">
       <div class="calendar-header">
         <button id="btn-month-prev" type="button" class="calendar-nav" aria-label="Previous month">‹</button>
@@ -297,6 +305,20 @@
     <button id="btn-mark-dry" type="button" class="btn btn-secondary">No drinks</button>
     <button id="btn-clear-day" type="button" class="btn btn-secondary">Clear</button>
     <button id="btn-day-done" type="button" class="btn btn-primary btn-done">Done</button>
+  </div>
+</div>
+
+<!-- ============ NAME REVIEW (bottom sheet) ============ -->
+<div id="name-review-editor" class="sheet hidden" role="dialog" aria-modal="true">
+  <div class="sheet-handle"></div>
+  <button id="btn-name-review-close" type="button" class="icon-btn sheet-close" aria-label="Close">×</button>
+  <h2 class="sheet-title">Review drink names</h2>
+  <p class="drink-details-intro">These were split into brand and drink automatically. Fix any that guessed wrong.</p>
+
+  <div id="name-review-list" class="name-review-list"></div>
+
+  <div class="sheet-actions">
+    <button id="btn-name-review-save" type="button" class="btn btn-primary btn-done">Save</button>
   </div>
 </div>
 

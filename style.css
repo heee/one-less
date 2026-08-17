@@ -662,22 +662,22 @@ button { cursor: pointer; }
 
 .type-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.625rem;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
   margin-bottom: 0.7rem;
 }
 .type-card {
   background: var(--surface);
   border-radius: var(--radius-sm);
-  padding: 0.7rem 0.5rem;
+  padding: 0.6rem 0.35rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
   text-align: center;
 }
 .type-card.is-active { background: var(--accent-soft); }
-.type-card-label { font-size: 0.78rem; font-weight: 500; }
+.type-card-label { font-size: 0.68rem; font-weight: 500; line-height: 1.15; }
 .type-card-add {
   width: 22px;
   height: 22px;

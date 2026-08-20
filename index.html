@@ -193,6 +193,7 @@
         <h1 class="screen-title">Your drinks</h1>
       </div>
       <div class="period-picker" role="group" aria-label="Statistics period">
+        <button type="button" class="period-option" data-period="all" aria-label="All time" title="All time">A</button>
         <button type="button" class="period-option" data-period="week" aria-label="Last 7 days" title="Week">W</button>
         <button type="button" class="period-option" data-period="month" aria-label="Last 30 days" title="Month">M</button>
         <button type="button" class="period-option" data-period="quarter" aria-label="Last 3 months" title="Quarter">Q</button>
@@ -215,6 +216,8 @@
         <div><strong id="drinks-named-percent">0%</strong><span>identified</span></div>
       </div>
     </div>
+
+    <div id="drink-category-split" class="drink-category-split"></div>
 
     <div class="category-section-head">
       <div>

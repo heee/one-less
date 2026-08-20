@@ -43,7 +43,7 @@ const state = {
   reviewItems: [],
   lastShareMessage: null,
   deleteAllArmed: false,
-  statsPeriod: "month",
+  statsPeriod: "all",
   newNameSlots: new Set(),
 };
 
@@ -829,24 +829,37 @@ function renderTrendChart(points) {
   const yFor = (v) => max > 0 ? topPad + plotH - (v / max) * plotH : h - bottomPad;
   const coords = values.map((v, i) => `${(i * stepX).toFixed(1)},${yFor(v).toFixed(1)}`);
 
+  const lastIdx = values.length - 1;
+  const isPeak = (i) => {
+    const v = values[i];
+    if (v <= 0) return false;
+    const left = i > 0 ? values[i - 1] : -Infinity;
+    const right = i < lastIdx ? values[i + 1] : -Infinity;
+    return v >= left && v >= right && (v > left || v > right);
+  };
+
   let markers = "";
-  const peak = Math.max(...values);
-  if (peak > 0) {
-    const peakIdx = values.indexOf(peak);
-    const lastIdx = values.length - 1;
-    const marked = new Set([peakIdx, lastIdx]);
-    for (const idx of marked) {
-      const cx = idx * stepX, cy = yFor(values[idx]);
-      const labelY = cy < 18 ? cy + 13 : cy - 8;
-      markers += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="2.5" fill="var(--accent)" />`;
-      markers += `<text x="${cx.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle">${values[idx]}</text>`;
-    }
+  let todayNeedsDot = true;
+  for (let i = 0; i < values.length; i++) {
+    if (!isPeak(i)) continue;
+    if (i === lastIdx) todayNeedsDot = false;
+    const cx = i * stepX, cy = yFor(values[i]);
+    const badgeY = cy < 20 ? cy + 14 : cy - 14;
+    markers += `<g class="trend-peak-badge">
+      <circle cx="${cx.toFixed(1)}" cy="${badgeY.toFixed(1)}" r="9" />
+      <text x="${cx.toFixed(1)}" y="${badgeY.toFixed(1)}">${values[i]}</text>
+    </g>`;
+  }
+  if (todayNeedsDot) {
+    const cx = lastIdx * stepX, cy = yFor(values[lastIdx]);
+    markers += `<circle class="trend-today-dot" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="2.5" />`;
   }
 
-  const labelIndexes = [0, Math.floor((points.length - 1) / 2), points.length - 1];
+  const labelIndexes = [];
+  for (let i = 0; i <= lastIdx; i += 7) labelIndexes.push(i);
   const dateLabels = labelIndexes.map((idx, position) => {
     const label = dateFromStr(points[idx].date).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    const anchor = position === 0 ? "start" : position === 2 ? "end" : "middle";
+    const anchor = position === 0 ? "start" : idx === lastIdx ? "end" : "middle";
     return `<text class="trend-date-label" x="${(idx * stepX).toFixed(1)}" y="${h - 3}" text-anchor="${anchor}">${label}</text>`;
   }).join("");
   const avgY = yFor(average).toFixed(1);
@@ -1349,6 +1362,7 @@ $("btn-get-started").addEventListener("click", () => {
 // ------------------- drink insights -------------------
 
 const STATS_PERIODS = {
+  all: { days: null, label: "All time" },
   week: { days: 7, label: "Last 7 days" },
   month: { days: 30, label: "Last 30 days" },
   quarter: { days: 90, label: "Last 3 months" },
@@ -1356,7 +1370,10 @@ const STATS_PERIODS = {
 };
 
 function computeDrinkInsights(data, today, days) {
-  const from = addDays(today, -(days - 1));
+  const dateKeys = Object.keys(data.days);
+  const from = days == null
+    ? dateKeys.reduce((min, d) => (min === null || compareDateStr(d, min) < 0 ? d : min), null) || today
+    : addDays(today, -(days - 1));
   const categories = new Map(DRINK_TYPES.map((type) => [type.id, {
     type,
     total: 0,
@@ -1404,6 +1421,47 @@ function shortRangeDate(dateStr) {
   return dateFromStr(dateStr).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+function jumpToCategoryCard(categoryId) {
+  const card = $(`category-card-${categoryId}`);
+  if (!card) return;
+  card.scrollIntoView({ behavior: "smooth", block: "start" });
+  card.classList.add("is-jump-target");
+  window.setTimeout(() => card.classList.remove("is-jump-target"), 1200);
+}
+
+function renderCategorySplit(stats) {
+  const container = $("drink-category-split");
+  const withDrinks = [...stats.list].filter((category) => category.total > 0).sort((a, b) => b.total - a.total);
+
+  if (withDrinks.length === 0) {
+    container.innerHTML = "";
+    return;
+  }
+
+  const segments = withDrinks.map((category) => {
+    const pct = (category.total / stats.total) * 100;
+    return `<button type="button" class="split-segment" data-category-id="${category.type.id}" style="width:${pct.toFixed(2)}%;--category-color:${category.type.color}" title="${escapeHtml(category.type.label)}: ${category.total} (${Math.round(pct)}%)" aria-label="Jump to ${escapeHtml(category.type.label)} details"></button>`;
+  }).join("");
+
+  const legend = withDrinks.map((category) => {
+    const pct = Math.round((category.total / stats.total) * 100);
+    return `
+      <button type="button" class="split-legend-item" data-category-id="${category.type.id}" aria-label="Jump to ${escapeHtml(category.type.label)} details">
+        <span class="split-swatch" style="--category-color:${category.type.color}"></span>
+        <span class="split-legend-label">${escapeHtml(category.type.label)}</span>
+        <span class="split-legend-pct">${pct}%</span>
+      </button>`;
+  }).join("");
+
+  container.innerHTML = `
+    <div class="split-bar">${segments}</div>
+    <div class="split-legend">${legend}</div>`;
+
+  container.querySelectorAll("[data-category-id]").forEach((el) => {
+    el.addEventListener("click", () => jumpToCategoryCard(el.dataset.categoryId));
+  });
+}
+
 function renderDrinkInsights() {
   const period = STATS_PERIODS[state.statsPeriod];
   const stats = computeDrinkInsights(getData(), todayStr(), period.days);
@@ -1422,6 +1480,8 @@ function renderDrinkInsights() {
     ? `${stats.leader.type.label} leads · ${stats.leader.total}`
     : "No drinks logged";
 
+  renderCategorySplit(stats);
+
   const container = $("drink-category-stats");
   container.innerHTML = "";
   const sortedList = [...stats.list].sort((a, b) => b.total - a.total);
@@ -1433,6 +1493,7 @@ function renderDrinkInsights() {
     const unnamed = category.total - category.named;
 
     const card = document.createElement("article");
+    card.id = `category-card-${category.type.id}`;
     card.className = "drink-category-card" + (isLeader ? " is-leader" : "");
     card.style.setProperty("--category-color", category.type.color);
 

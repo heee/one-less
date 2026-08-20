@@ -1,7 +1,7 @@
 // Minimal app-shell cache so the PWA opens instantly and installs cleanly.
 // This app makes no network requests of any kind at runtime — this worker
 // only ever serves the same-origin static shell from cache.
-const CACHE_NAME = "ol-shell-v22";
+const CACHE_NAME = "ol-shell-v25";
 const SHELL_FILES = [
   "./",
   "./index.html",

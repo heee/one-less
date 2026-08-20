@@ -748,10 +748,38 @@ button { cursor: pointer; }
 }
 .drink-detail-heading span:first-child { font-size: 0.82rem; font-weight: 700; }
 .drink-detail-heading span:last-child { font-size: 0.68rem; font-weight: 600; color: var(--ink-faint); }
-.drink-name-row { display: flex; flex-direction: column; gap: 0.35rem; }
+.drink-name-row { display: flex; align-items: flex-end; gap: 0.5rem; }
 .drink-name-row + .drink-name-row { margin-top: 0.6rem; padding-top: 0.6rem; border-top: 1px dashed var(--divider); }
+.drink-name-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.35rem; }
 .drink-name-number { font-size: 0.66rem; font-weight: 600; color: var(--ink-faint); }
 .drink-field-pair { display: flex; gap: 0.5rem; }
+
+.drink-rating { display: flex; gap: 0.35rem; flex: none; }
+.rating-btn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-white);
+  color: var(--ink-faint);
+  padding: 0;
+  flex: none;
+}
+.rating-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.rating-btn.is-active svg { fill: currentColor; }
+.rating-up.is-active { background: var(--accent); border-color: var(--accent); color: var(--surface-white); }
+.rating-down.is-active { background: var(--danger); border-color: var(--danger); color: var(--surface-white); }
 .drink-field { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
 .drink-field-label { font-size: 0.62rem; font-weight: 600; color: var(--ink-faint); }
 .drink-name-select, .drink-name-input {

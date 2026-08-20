@@ -173,6 +173,7 @@ function migrateData(obj) {
             if (!e || typeof e !== "object") return { brand: "", drink: "" };
             const out = { brand: typeof e.brand === "string" ? e.brand : "", drink: typeof e.drink === "string" ? e.drink : "" };
             if (typeof e._raw === "string") out._raw = e._raw;
+            if (e.rating === "up" || e.rating === "down") out.rating = e.rating;
             return out;
           });
           return { type, count: drink.count, entries };
@@ -230,8 +231,10 @@ function applyNameReview(corrections) {
         if (!e._raw) return e;
         const key = `${drink.type}|${e._raw.toLocaleLowerCase()}`;
         const c = byKey.get(key);
-        if (!c) return { brand: e.brand, drink: e.drink };
-        return { brand: c.brand.trim().slice(0, 60), drink: c.drink.trim().slice(0, 60) };
+        if (!c) return e.rating ? { brand: e.brand, drink: e.drink, rating: e.rating } : { brand: e.brand, drink: e.drink };
+        return e.rating
+          ? { brand: c.brand.trim().slice(0, 60), drink: c.drink.trim().slice(0, 60), rating: e.rating }
+          : { brand: c.brand.trim().slice(0, 60), drink: c.drink.trim().slice(0, 60) };
       });
     }
   }
@@ -1057,11 +1060,14 @@ function renderDrinkDetails(data, entry, dateStr) {
       const row = document.createElement("div");
       row.className = "drink-name-row";
 
+      const main = document.createElement("div");
+      main.className = "drink-name-main";
+
       if (drink.count > 1) {
         const number = document.createElement("span");
         number.className = "drink-name-number";
         number.textContent = `Drink ${index + 1}`;
-        row.appendChild(number);
+        main.appendChild(number);
       }
 
       const fieldPair = document.createElement("div");
@@ -1095,11 +1101,58 @@ function renderDrinkDetails(data, entry, dateStr) {
         onCommit: (value) => setDrinkEntryField(dateStr, type.id, index, "drink", value),
       }));
 
-      row.appendChild(fieldPair);
+      main.appendChild(fieldPair);
+      row.appendChild(main);
+      row.appendChild(buildRatingButtons(dateStr, type, index, current.rating));
       group.appendChild(row);
     }
     container.appendChild(group);
   }
+}
+
+const THUMB_UP_PATH = "M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3";
+const THUMB_DOWN_PATH = "M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17";
+
+// Two stroke-only toggle buttons — thumbs up/down — that go solid once
+// tapped. Tapping an already-active one clears the rating back to unset;
+// tapping the other swaps it, so at most one is ever active per drink.
+function buildRatingButtons(dateStr, type, index, rating) {
+  const group = document.createElement("div");
+  group.className = "drink-rating";
+
+  const makeButton = (kind, path, label) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    const isActive = rating === kind;
+    btn.className = `rating-btn rating-${kind}` + (isActive ? " is-active" : "");
+    btn.setAttribute("aria-label", `Mark ${type.label} drink ${index + 1} as ${label}`);
+    btn.setAttribute("aria-pressed", String(isActive));
+    btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="${path}"/></svg>`;
+    btn.addEventListener("click", () => {
+      setDrinkEntryRating(dateStr, type.id, index, isActive ? null : kind);
+      renderDayEditor();
+    });
+    return btn;
+  };
+
+  group.appendChild(makeButton("up", THUMB_UP_PATH, "liked"));
+  group.appendChild(makeButton("down", THUMB_DOWN_PATH, "disliked"));
+  return group;
+}
+
+function setDrinkEntryRating(dateStr, typeId, index, rating) {
+  const data = getData();
+  const entry = data.days[dateStr];
+  if (!entry) return;
+  const drinkIndex = entry.drinks.findIndex((drink) => drink.type === typeId);
+  if (drinkIndex === -1 || index >= entry.drinks[drinkIndex].count) return;
+  const drink = entry.drinks[drinkIndex];
+  const entries = Array.isArray(drink.entries) ? drink.entries.slice(0, drink.count) : [];
+  while (entries.length < drink.count) entries.push({ brand: "", drink: "" });
+  const current = entries[index] || { brand: "", drink: "" };
+  entries[index] = { ...current, rating };
+  entry.drinks[drinkIndex] = { ...drink, entries };
+  setData(data);
 }
 
 // Builds one labeled brand-or-drink field: a dropdown of known values plus
@@ -1201,7 +1254,11 @@ function setDrinkEntryField(dateStr, typeId, index, field, value) {
   const entries = Array.isArray(drink.entries) ? drink.entries.slice(0, drink.count) : [];
   while (entries.length < drink.count) entries.push({ brand: "", drink: "" });
   const current = entries[index] || { brand: "", drink: "" };
-  entries[index] = { brand: field === "brand" ? value.slice(0, 60) : current.brand, drink: field === "drink" ? value.slice(0, 60) : current.drink };
+  entries[index] = {
+    brand: field === "brand" ? value.slice(0, 60) : current.brand,
+    drink: field === "drink" ? value.slice(0, 60) : current.drink,
+    ...(current.rating ? { rating: current.rating } : {}),
+  };
   entry.drinks[drinkIndex] = { ...drink, entries };
   setData(data);
   renderHome();

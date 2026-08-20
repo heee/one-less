@@ -1008,6 +1008,25 @@ button { cursor: pointer; }
 }
 .brand-stat-row strong { color: var(--ink); }
 .brand-stat-row.is-unnamed { color: var(--ink-faint); font-style: italic; }
+.brand-stat-right { display: flex; align-items: center; gap: 0.5rem; }
+.rating-tally-group { display: flex; align-items: center; gap: 0.4rem; }
+.rating-tally {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  color: var(--ink-faint);
+  font-size: 0.66rem;
+  font-weight: 600;
+}
+.rating-tally svg {
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 .category-empty { color: var(--ink-faint); font-size: 0.72rem; padding-top: 0.3rem; }
 
 .thermometer-wrap {

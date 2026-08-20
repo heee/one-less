@@ -1113,6 +1113,16 @@ function renderDrinkDetails(data, entry, dateStr) {
 const THUMB_UP_PATH = "M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3";
 const THUMB_DOWN_PATH = "M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17";
 
+// Subtle, greyed-out thumbs up/down counts for a named drink in the "By
+// drink" list — omitted entirely when neither count is present.
+function ratingTally(item) {
+  if (!item || (!item.up && !item.down)) return "";
+  const part = (path, count) => count > 0
+    ? `<span class="rating-tally"><svg viewBox="0 0 24 24"><path d="${path}"/></svg>${count}</span>`
+    : "";
+  return `<span class="rating-tally-group">${part(THUMB_UP_PATH, item.up)}${part(THUMB_DOWN_PATH, item.down)}</span>`;
+}
+
 // Two stroke-only toggle buttons — thumbs up/down — that go solid once
 // tapped. Tapping an already-active one clears the rating back to unset;
 // tapping the other swaps it, so at most one is ever active per drink.
@@ -1481,8 +1491,18 @@ function computeDrinkInsights(data, today, days) {
         if (drinkName) {
           const key = drinkName.toLocaleLowerCase();
           const existing = category.drinkNames.get(key);
-          if (existing) existing.count++;
-          else category.drinkNames.set(key, { name: drinkName, count: 1 });
+          if (existing) {
+            existing.count++;
+            if (e.rating === "up") existing.up++;
+            else if (e.rating === "down") existing.down++;
+          } else {
+            category.drinkNames.set(key, {
+              name: drinkName,
+              count: 1,
+              up: e.rating === "up" ? 1 : 0,
+              down: e.rating === "down" ? 1 : 0,
+            });
+          }
         }
       }
     }
@@ -1580,7 +1600,7 @@ function renderDrinkInsights() {
     const statRows = (items) => items.map((item) => `
       <div class="brand-stat-row">
         <span>${escapeHtml(item.name)}</span>
-        <strong>${item.count}</strong>
+        <span class="brand-stat-right">${ratingTally(item)}<strong>${item.count}</strong></span>
       </div>`).join("");
     const brandRows = brands.length > 0 ? `
       <p class="name-list-subhead">By brand</p>

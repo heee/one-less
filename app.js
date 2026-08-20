@@ -817,6 +817,28 @@ function renderMoreStats(data, today) {
   renderBarChart(computeMonthly6(data, today));
 }
 
+// Catmull-Rom-to-Bezier smoothing, with control points clamped to the plot's
+// vertical bounds so the curve can't overshoot above/below the chart area.
+function smoothSvgPath(pts, yMin, yMax) {
+  if (pts.length === 0) return "";
+  if (pts.length === 1) return `M ${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+
+  const clampY = (y) => Math.min(yMax, Math.max(yMin, y));
+  let d = `M ${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    const cp1x = p1[0] + (p2[0] - p0[0]) / 6;
+    const cp1y = clampY(p1[1] + (p2[1] - p0[1]) / 6);
+    const cp2x = p2[0] - (p3[0] - p1[0]) / 6;
+    const cp2y = clampY(p2[1] - (p3[1] - p1[1]) / 6);
+    d += ` C ${cp1x.toFixed(1)},${cp1y.toFixed(1)} ${cp2x.toFixed(1)},${cp2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  return d;
+}
+
 function renderTrendChart(points) {
   const values = points.map((point) => point.total);
   const average = values.reduce((sum, value) => sum + value, 0) / (values.length || 1);
@@ -827,7 +849,8 @@ function renderTrendChart(points) {
   const stepX = w / (points.length - 1 || 1);
 
   const yFor = (v) => max > 0 ? topPad + plotH - (v / max) * plotH : h - bottomPad;
-  const coords = values.map((v, i) => `${(i * stepX).toFixed(1)},${yFor(v).toFixed(1)}`);
+  const linePoints = values.map((v, i) => [i * stepX, yFor(v)]);
+  const smoothPath = smoothSvgPath(linePoints, topPad, h - bottomPad);
 
   const lastIdx = values.length - 1;
   const isPeak = (i) => {
@@ -872,7 +895,7 @@ function renderTrendChart(points) {
     <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" aria-label="Daily drinks and 30-day average">
       <line x1="0" y1="${h - bottomPad}" x2="${w}" y2="${h - bottomPad}" stroke="var(--divider)" stroke-width="1" />
       <line x1="0" y1="${avgY}" x2="${w}" y2="${avgY}" stroke="var(--clay-text)" stroke-width="1.6" stroke-dasharray="5 4" />
-      <polyline points="${coords.join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="${smoothPath}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
       ${markers}
       ${dateLabels}
     </svg>`;

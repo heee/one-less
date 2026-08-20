@@ -908,7 +908,6 @@ button { cursor: pointer; }
   padding: 0;
   cursor: pointer;
   color: inherit;
-  font: inherit;
 }
 .split-legend-item:hover .split-legend-label,
 .split-legend-item:focus-visible .split-legend-label { text-decoration: underline; }

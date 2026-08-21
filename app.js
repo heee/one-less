@@ -1084,9 +1084,11 @@ function renderDrinkDetails(data, entry, dateStr) {
         inputPlaceholder: "Enter brand",
         naOption: true,
         // Changing the brand reshapes the drink field's option list below
-        // it, so this one re-renders the whole editor rather than just
-        // writing through — the drink select needs an actual remount.
-        onCommit: (value) => { setDrinkEntryField(dateStr, type.id, index, "brand", value); renderDayEditor(); },
+        // it, so this re-renders the whole editor once the value is
+        // finalized (select pick or blur) — not on every keystroke, which
+        // would remount the input and steal its own focus while typing.
+        onCommit: (value) => setDrinkEntryField(dateStr, type.id, index, "brand", value),
+        reshapesSiblingField: true,
       }));
 
       fieldPair.appendChild(buildDrinkFieldRow({
@@ -1169,7 +1171,7 @@ function setDrinkEntryRating(dateStr, typeId, index, rating) {
 // a "+ New" option, or a free-text input once that's picked (with a
 // "Saved" button to switch back). Brand and drink fields both follow this
 // same pattern — only the value list and labels differ.
-function buildDrinkFieldRow({ slotKey, fieldLabel, ariaLabel, knownValues, currentValue, placeholderLabel, newLabel, inputPlaceholder, naOption, onCommit }) {
+function buildDrinkFieldRow({ slotKey, fieldLabel, ariaLabel, knownValues, currentValue, placeholderLabel, newLabel, inputPlaceholder, naOption, onCommit, reshapesSiblingField }) {
   const field = document.createElement("label");
   field.className = "drink-field";
 
@@ -1219,8 +1221,10 @@ function buildDrinkFieldRow({ slotKey, fieldLabel, ariaLabel, knownValues, curre
         if (input) input.focus();
       } else if (select.value === "__na__") {
         onCommit("");
+        if (reshapesSiblingField) renderDayEditor();
       } else {
         onCommit(select.value);
+        if (reshapesSiblingField) renderDayEditor();
       }
     });
     field.appendChild(select);
@@ -1236,6 +1240,7 @@ function buildDrinkFieldRow({ slotKey, fieldLabel, ariaLabel, knownValues, curre
     input.dataset.nameSlot = slotKey;
     input.setAttribute("aria-label", ariaLabel);
     input.addEventListener("input", () => onCommit(input.value));
+    if (reshapesSiblingField) input.addEventListener("blur", () => renderDayEditor());
     inputWrap.appendChild(input);
 
     if (knownValues.length > 0 || naOption) {

@@ -99,7 +99,10 @@ button { cursor: pointer; }
 /* Settings uses a tighter vertical rhythm than Home — denser, lower
    visual weight, per spec. */
 #screen-settings { gap: 0.75rem; }
-#screen-drinks { gap: 1rem; }
+#screen-drinks {
+  gap: 1rem;
+  padding-top: 1.5rem;
+}
 
 .screen-title {
   font-weight: 700;

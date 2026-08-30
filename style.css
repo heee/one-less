@@ -552,15 +552,17 @@ button { cursor: pointer; }
 .trend-legend {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.9rem;
   margin-bottom: 0.15rem;
   color: var(--ink-faint);
   font-size: 0.68rem;
-  font-weight: 600;
+  font-weight: 400;
 }
 .trend-legend span { display: inline-flex; align-items: center; gap: 0.3rem; }
 .legend-line { width: 16px; height: 0; border-top: 2px solid var(--accent); }
 .legend-line.average { border-top-color: var(--clay-text); border-top-style: dashed; }
+.legend-line.average-7 { border-top-color: var(--ink-faint); border-top-style: dotted; }
 
 .bar-chart {
   display: flex;

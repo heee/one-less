@@ -845,6 +845,8 @@ function smoothSvgPath(pts, yMin, yMax) {
 function renderTrendChart(points) {
   const values = points.map((point) => point.total);
   const average = values.reduce((sum, value) => sum + value, 0) / (values.length || 1);
+  const last7 = values.slice(-7);
+  const average7 = last7.reduce((sum, value) => sum + value, 0) / (last7.length || 1);
   const max = Math.max(1, average, ...values);
   const w = 320, h = 104;
   const topPad = 12, bottomPad = 25;
@@ -893,7 +895,8 @@ function renderTrendChart(points) {
   $("trend-chart").innerHTML = `
     <div class="trend-legend">
       <span><i class="legend-line daily"></i>Daily</span>
-      <span><i class="legend-line average"></i>30-day avg ${average.toFixed(1)}</span>
+      <span><i class="legend-line average"></i>30-day avg (${average.toFixed(1)})</span>
+      <span><i class="legend-line average-7"></i>7-day avg (${average7.toFixed(1)})</span>
     </div>
     <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" aria-label="Daily drinks and 30-day average">
       <line x1="0" y1="${h - bottomPad}" x2="${w}" y2="${h - bottomPad}" stroke="var(--divider)" stroke-width="1" />
@@ -920,10 +923,12 @@ function renderBarChart(months) {
     fill.className = "bar-fill" + (m.isPartial ? " is-current" : "");
     fill.style.height = `${barHeight}%`;
     track.appendChild(fill);
-    const value = document.createElement("div");
-    value.className = "bar-value";
-    value.textContent = String(m.total);
-    track.appendChild(value);
+    if (m.total > 0) {
+      const value = document.createElement("div");
+      value.className = "bar-value";
+      value.textContent = String(m.total);
+      track.appendChild(value);
+    }
     col.appendChild(track);
 
     const label = document.createElement("div");

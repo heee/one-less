@@ -1594,7 +1594,7 @@ function renderDrinkInsights() {
 
   const container = $("drink-category-stats");
   container.innerHTML = "";
-  const sortedList = [...stats.list].sort((a, b) => b.total - a.total);
+  const sortedList = [...stats.list].filter((category) => category.total > 0).sort((a, b) => b.total - a.total);
   for (const category of sortedList) {
     const isLeader = category === stats.leader;
     const fillPercent = category.total > 0 ? Math.max(8, (category.total / stats.max) * 100) : 0;

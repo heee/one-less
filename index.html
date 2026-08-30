@@ -99,6 +99,12 @@
         <button id="btn-open-settings" type="button" class="menu-btn" aria-label="Settings" title="Settings">
           <span></span><span></span><span></span>
         </button>
+        <button id="btn-share" type="button" class="share-btn" aria-label="Share" title="Share">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 3 3 10.5l7 3 3 7L21 3Z"></path>
+            <path d="M21 3 10 14"></path>
+          </svg>
+        </button>
       </div>
     </div>
 
@@ -111,8 +117,6 @@
         <p id="goal-text-sub" class="goal-text-sub">—</p>
       </div>
     </div>
-
-    <p id="stat-caption" class="stat-caption">—</p>
 
     <div id="catchup-banner" class="catchup-banner hidden">
       <span id="catchup-text">days need logging</span>
@@ -144,16 +148,15 @@
 
     <div class="more-stats">
       <div class="more-stats-header">
-        <h2 class="section-title">More stats</h2>
-        <button id="btn-share" type="button" class="share-link">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="18" cy="5" r="2.5"></circle>
-            <circle cx="6" cy="12" r="2.5"></circle>
-            <circle cx="18" cy="19" r="2.5"></circle>
-            <path d="m8.2 10.8 7.6-4.5M8.2 13.2l7.6 4.5"></path>
-          </svg>
-          <span>Share</span>
-        </button>
+        <h2 class="section-title">Statistics</h2>
+      </div>
+      <div class="stat-row">
+        <span>Current streak</span>
+        <span id="stat-streak" class="stat-row-value">0-day (best 0)</span>
+      </div>
+      <div class="stat-row">
+        <span>Drinks logged this month</span>
+        <span id="stat-month-total" class="stat-row-value">0</span>
       </div>
       <div class="stat-row">
         <span>Alcohol-free days this month</span>

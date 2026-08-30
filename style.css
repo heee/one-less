@@ -305,7 +305,7 @@ button { cursor: pointer; }
   height: 2.5rem;
   border-radius: 50%;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: none;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -314,7 +314,7 @@ button { cursor: pointer; }
   transition: transform 0.15s ease;
 }
 .insights-btn:active { transform: scale(0.92); }
-.insights-btn span { width: 3px; border-radius: 2px; background: var(--accent); }
+.insights-btn span { width: 3px; border-radius: 2px; background: var(--ink-faint); }
 .insights-btn span:nth-child(1) { height: 7px; }
 .insights-btn span:nth-child(2) { height: 13px; }
 .insights-btn span:nth-child(3) { height: 10px; }
@@ -336,6 +336,21 @@ button { cursor: pointer; }
 }
 .menu-btn:active { transform: scale(0.92); }
 .menu-btn span { width: 16px; height: 2px; border-radius: 1px; background: var(--ink-faint); }
+
+.share-btn {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: var(--surface);
+  border: none;
+  color: var(--ink-faint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease;
+}
+.share-btn:active { transform: scale(0.92); }
+.share-btn svg { width: 18px; height: 18px; display: block; }
 
 /* ---------------- Weekly goal card ---------------- */
 
@@ -369,18 +384,6 @@ button { cursor: pointer; }
 }
 .goal-text-title { font-size: 0.94rem; font-weight: 600; margin: 0 0 0.25rem; }
 .goal-text-sub { font-size: 0.81rem; color: var(--ink-dim); line-height: 1.4; }
-
-/* ---------------- Streak / month caption ---------------- */
-
-.stat-caption {
-  font-size: 0.81rem;
-  color: var(--ink-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  margin-top: -0.5rem;
-}
-.stat-caption b { color: var(--ink); font-weight: 700; }
 
 /* ---------------- Catch-up banner ---------------- */
 
@@ -514,27 +517,9 @@ button { cursor: pointer; }
   padding: 1rem 1.1rem 1.1rem;
 }
 .more-stats-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
   margin-bottom: 0.5rem;
 }
 .section-title { font-size: 0.94rem; font-weight: 600; margin: 0; }
-.share-link {
-  background: transparent;
-  border: 1px solid var(--accent);
-  border-radius: 999px;
-  color: var(--accent);
-  font-weight: 600;
-  font-size: 0.81rem;
-  padding: 0.38rem 0.65rem;
-  min-height: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-.share-link:active { opacity: 0.7; }
-.share-link svg { width: 14px; height: 14px; display: block; }
 
 .stat-row {
   display: flex;

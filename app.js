@@ -560,8 +560,8 @@ function renderHome() {
   const streak = computeDryStreak(data, today);
   const longest = computeLongestStreakEver(data, today);
   const monthTotal = computeMonthTotal(data, today);
-  $("stat-caption").innerHTML =
-    `<b>${streak}-day streak</b> (best ${longest}) · <b>${monthTotal}</b> drink${monthTotal === 1 ? "" : "s"} logged this month`;
+  $("stat-streak").textContent = `${streak}-day (best ${longest})`;
+  $("stat-month-total").textContent = `${monthTotal}`;
 
   renderCatchupBanner(data, today);
   renderReviewNamesBanner(data);

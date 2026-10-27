@@ -1534,9 +1534,34 @@ function shortRangeDate(dateStr) {
 function jumpToCategoryCard(categoryId) {
   const card = $(`category-card-${categoryId}`);
   if (!card) return;
+  setCategoryCardOpen(card, true);
   card.scrollIntoView({ behavior: "smooth", block: "start" });
   card.classList.add("is-jump-target");
   window.setTimeout(() => card.classList.remove("is-jump-target"), 1200);
+}
+
+// Which category cards are expanded on the Your drinks screen (per device).
+const LS_OPEN_CATEGORIES_KEY = "ol-open-categories";
+
+function loadOpenCategories() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(LS_OPEN_CATEGORIES_KEY)) || []);
+  } catch {
+    return new Set();
+  }
+}
+
+function setCategoryCardOpen(card, open) {
+  card.classList.toggle("is-open", open);
+  card.querySelector(".category-card-toggle").setAttribute("aria-expanded", String(open));
+  const openIds = loadOpenCategories();
+  if (open) openIds.add(card.dataset.categoryId);
+  else openIds.delete(card.dataset.categoryId);
+  try {
+    localStorage.setItem(LS_OPEN_CATEGORIES_KEY, JSON.stringify([...openIds]));
+  } catch {
+    // Storage unavailable: the toggle still works for this visit.
+  }
 }
 
 function renderCategorySplit(stats) {
@@ -1570,6 +1595,30 @@ function renderCategorySplit(stats) {
   container.querySelectorAll("[data-category-id]").forEach((el) => {
     el.addEventListener("click", () => jumpToCategoryCard(el.dataset.categoryId));
   });
+  fitSplitLegend(container.querySelector(".split-legend"));
+}
+
+// Keeps the legend on one line: the smallest categories fold into a
+// "+N more" item that scrolls to the category list.
+function fitSplitLegend(legend) {
+  if (!legend.clientWidth) return;
+  const items = [...legend.querySelectorAll(".split-legend-item")];
+  let hidden = 0;
+  while (legend.scrollWidth > legend.clientWidth && hidden < items.length - 1) {
+    hidden++;
+    items[items.length - hidden].hidden = true;
+    let more = legend.querySelector(".split-legend-more");
+    if (!more) {
+      more = document.createElement("button");
+      more.type = "button";
+      more.className = "split-legend-item split-legend-more";
+      more.addEventListener("click", () => {
+        $("drink-category-stats").scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      legend.appendChild(more);
+    }
+    more.textContent = `+${hidden} more`;
+  }
 }
 
 function renderDrinkInsights() {
@@ -1586,25 +1635,25 @@ function renderDrinkInsights() {
   $("drinks-named-total").textContent = String(stats.named);
   $("drinks-distinct-total").textContent = String(stats.distinct);
   $("drinks-named-percent").textContent = stats.total ? `${Math.round((stats.named / stats.total) * 100)}%` : "0%";
-  $("drinks-leader").textContent = stats.leader
-    ? `${stats.leader.type.label} leads · ${stats.leader.total}`
-    : "No drinks logged";
 
   renderCategorySplit(stats);
 
   const container = $("drink-category-stats");
   container.innerHTML = "";
+  const openIds = loadOpenCategories();
   const sortedList = [...stats.list].filter((category) => category.total > 0).sort((a, b) => b.total - a.total);
   for (const category of sortedList) {
     const isLeader = category === stats.leader;
-    const fillPercent = category.total > 0 ? Math.max(8, (category.total / stats.max) * 100) : 0;
+    const fillPercent = category.total > 0 ? Math.max(4, (category.total / stats.max) * 100) : 0;
+    const isOpen = openIds.has(category.type.id);
     const brands = [...category.brands.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
     const drinkNames = [...category.drinkNames.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
     const unnamed = category.total - category.named;
 
     const card = document.createElement("article");
     card.id = `category-card-${category.type.id}`;
-    card.className = "drink-category-card" + (isLeader ? " is-leader" : "");
+    card.className = "drink-category-card" + (isLeader ? " is-leader" : "") + (isOpen ? " is-open" : "");
+    card.dataset.categoryId = category.type.id;
     card.style.setProperty("--category-color", category.type.color);
 
     const statRows = (items) => items.map((item) => `
@@ -1626,23 +1675,22 @@ function renderDrinkInsights() {
     const emptyRow = category.total === 0 ? `<p class="category-empty">Nothing logged in this period.</p>` : "";
 
     card.innerHTML = `
-      <div class="category-card-content">
+      <button type="button" class="category-card-toggle" aria-expanded="${isOpen}" aria-controls="category-list-${category.type.id}">
         <div class="category-card-heading">
-          <div>
-            <div class="category-title-line">
-              <h3>${category.type.label}</h3>
-              ${isLeader ? '<span class="leader-chip">Leader</span>' : ""}
-            </div>
-            <p><strong>${category.total}</strong> drink${s(category.total)} · <strong>${category.drinkNames.size}</strong> named option${s(category.drinkNames.size)}</p>
+          <div class="category-title-line">
+            <h3>${category.type.label}</h3>
+            ${isLeader ? '<span class="leader-chip">Leader</span>' : ""}
           </div>
+          <p><strong>${category.total}</strong> drink${s(category.total)} · <strong>${category.drinkNames.size}</strong> named option${s(category.drinkNames.size)}</p>
         </div>
-        <div class="category-name-list">${brandRows}${drinkRows}${emptyRow}</div>
-      </div>
-      <div class="thermometer-wrap" aria-label="${category.type.label}: ${category.total} drinks">
-        <span class="thermometer-value">${category.total}</span>
-        <div class="thermometer-tube"><span style="height:${fillPercent.toFixed(1)}%"></span></div>
-        <div class="thermometer-bulb"></div>
-      </div>`;
+        <span class="category-card-total">${category.total}</span>
+        <span class="category-card-chevron" aria-hidden="true"></span>
+      </button>
+      <div class="category-meter" aria-hidden="true"><span style="width:${fillPercent.toFixed(1)}%"></span></div>
+      <div id="category-list-${category.type.id}" class="category-name-list">${brandRows}${drinkRows}${emptyRow}</div>`;
+    card.querySelector(".category-card-toggle").addEventListener("click", () => {
+      setCategoryCardOpen(card, !card.classList.contains("is-open"));
+    });
     container.appendChild(card);
   }
 }

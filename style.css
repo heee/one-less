@@ -864,6 +864,24 @@ button { cursor: pointer; }
   padding: 1.2rem;
 }
 .insights-period-label { font-size: 0.72rem; font-weight: 600; opacity: 0.7; }
+.insights-period-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.insights-share-btn {
+  width: 1.9rem;
+  height: 1.9rem;
+  margin: -0.4rem -0.4rem -0.4rem 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  border: none;
+  color: var(--surface-white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.insights-share-btn:active { transform: scale(0.92); }
+.insights-share-btn svg { width: 14px; height: 14px; display: block; }
 .insights-total-row {
   display: flex;
   align-items: flex-end;

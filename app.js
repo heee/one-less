@@ -1621,6 +1621,19 @@ function fitSplitLegend(legend) {
   }
 }
 
+// Expanded category lists show this many rows, then one "Other" line.
+const CATEGORY_TOP_N = 5;
+
+function otherRow(rest) {
+  if (rest.length === 0) return "";
+  const count = rest.reduce((sum, item) => sum + item.count, 0);
+  return `
+      <div class="brand-stat-row is-unnamed">
+        <span>Other (${rest.length} more)</span>
+        <strong>${count}</strong>
+      </div>`;
+}
+
 function renderDrinkInsights() {
   const period = STATS_PERIODS[state.statsPeriod];
   const stats = computeDrinkInsights(getData(), todayStr(), period.days);
@@ -1656,11 +1669,11 @@ function renderDrinkInsights() {
     card.dataset.categoryId = category.type.id;
     card.style.setProperty("--category-color", category.type.color);
 
-    const statRows = (items) => items.map((item) => `
+    const statRows = (items) => items.slice(0, CATEGORY_TOP_N).map((item) => `
       <div class="brand-stat-row">
         <span>${escapeHtml(item.name)}</span>
         <span class="brand-stat-right">${ratingTally(item)}<strong>${item.count}</strong></span>
-      </div>`).join("");
+      </div>`).join("") + otherRow(items.slice(CATEGORY_TOP_N));
     const brandRows = brands.length > 0 ? `
       <p class="name-list-subhead">By brand</p>
       ${statRows(brands)}` : "";
@@ -1935,8 +1948,33 @@ function pickShareMessage(ctx) {
 
 async function shareProgress() {
   const data = getData();
-  const ctx = buildShareContext(data, todayStr());
-  const message = pickShareMessage(ctx);
+  await shareMessage(data, pickShareMessage(buildShareContext(data, todayStr())));
+}
+
+function buildDrinkStatsMessage(stats, periodLabel) {
+  const range = `${periodLabel} (${shortRangeDate(stats.from)}–${shortRangeDate(stats.today)})`;
+  if (stats.total === 0) return `${range}: no drinks logged.`;
+  const mix = [...stats.list]
+    .filter((category) => category.total > 0)
+    .sort((a, b) => b.total - a.total)
+    .map((category) => `${category.type.label} ${Math.round((category.total / stats.total) * 100)}%`)
+    .join(", ");
+  const top = stats.list
+    .flatMap((category) => [...category.drinkNames.values()])
+    .sort((a, b) => b.count - a.count)[0];
+  const lines = [`${range}: ${stats.total} drink${s(stats.total)}.`, `Mix: ${mix}.`];
+  if (top) lines.push(`Most logged: ${top.name} (${top.count}).`);
+  return lines.join("\n");
+}
+
+async function shareDrinkStats() {
+  const data = getData();
+  const period = STATS_PERIODS[state.statsPeriod];
+  const stats = computeDrinkInsights(data, todayStr(), period.days);
+  await shareMessage(data, buildDrinkStatsMessage(stats, period.label));
+}
+
+async function shareMessage(data, message) {
   const shareData = { text: message };
   if (data.settings.shareIncludeUrl) shareData.url = APP_SHARE_URL;
 
@@ -1958,6 +1996,7 @@ async function shareProgress() {
 }
 
 $("btn-share").addEventListener("click", shareProgress);
+$("btn-share-drinks").addEventListener("click", shareDrinkStats);
 
 // ------------------- init -------------------
 

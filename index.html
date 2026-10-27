@@ -205,7 +205,15 @@
     </div>
 
     <div class="insights-summary">
-      <p id="drinks-period-label" class="insights-period-label">Last 30 days</p>
+      <div class="insights-period-row">
+        <p id="drinks-period-label" class="insights-period-label">Last 30 days</p>
+        <button id="btn-share-drinks" type="button" class="insights-share-btn" aria-label="Share these stats" title="Share">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 3 3 10.5l7 3 3 7L21 3Z"></path>
+            <path d="M21 3 10 14"></path>
+          </svg>
+        </button>
+      </div>
       <div class="insights-total-row">
         <div>
           <strong id="drinks-total" class="insights-total">0</strong>
